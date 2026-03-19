@@ -1,4 +1,6 @@
-const BASE = '/api'
+import API_URL from '../config/api'
+
+const BASE = API_URL + '/api'
 
 const getToken  = ()  => localStorage.getItem('sf_token')
 const setToken  = (t) => localStorage.setItem('sf_token', t)
