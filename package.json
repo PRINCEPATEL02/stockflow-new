@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "name": "stockflow-new",
   "private": true,
   "version": "0.0.0",
@@ -26,5 +27,21 @@
     "globals": "^17.4.0",
     "tailwindcss": "^4.2.2",
     "vite": "^8.0.1"
+=======
+  "name": "stockflow-pro-mongodb",
+  "version": "2.0.0",
+  "description": "StockFlow Pro – Full-Stack SaaS: React + Express + MongoDB",
+  "private": true,
+  "scripts": {
+    "install:all":  "npm install --prefix backend && npm install --prefix frontend",
+    "dev:backend":  "npm run dev   --prefix backend",
+    "dev:frontend": "npm run dev   --prefix frontend",
+    "dev":          "concurrently -n \"API,UI\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build":        "npm run build --prefix frontend",
+    "start":        "npm start     --prefix backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+>>>>>>> e888600 (Initial commit)
   }
 }
