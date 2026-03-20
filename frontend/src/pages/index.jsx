@@ -5,13 +5,12 @@ import {
   rawMaterials as rawMatApi, reports as repApi,
   company as coApi
 } from '../utils/api'
+import { TEMPLATES } from '../components/BillTemplates'
 import { genId, fc, fd, todayStr, calcTotals, numToWords, STATES, GST_RATES, UNITS } from '../utils/helpers'
 import { Inp, Sel, Btn, Card, Bdg, Modal, PageHeader, EmptyState, Spinner, ErrBanner } from '../components/ui'
 import BillPreview from '../components/BillPreview'
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// DASHBOARD
-// ═══════════════════════════════════════════════════════════════════════════════
+
 export function Dashboard({ setPage }) {
   const [data, setData] = useState(null)
   useEffect(() => { dashApi.stats().then(setData).catch(console.error) }, [])
@@ -127,8 +126,11 @@ export function BillForm({ type, setPage, company }) {
   const [productList, setProductList] = useState([])
   const [f, setF] = useState({
     date:todayStr(), dueDate:'', validTill:'', customerId:'',
-    items:[{id:genId(),productId:'',productName:'',qty:1,unit:'pcs',price:0,gstRate:18}],
-    notes:'', terms:company?.defaultTerms||'Payment due within 30 days.', disc:0, status:'unpaid'
+    items:[{id:genId(),productId:'',productName:'',hsnCode:'',qty:1,unit:'pcs',price:0,gstRate:18}],
+    notes:'', terms:company?.defaultTerms||'Payment due within 30 days.', disc:0, status:'unpaid',
+    templateId: company?.defaultTemplate || 'classic-tally',
+    declaration: company?.declaration || '',
+    placeOfSupply: ''
   })
   const [preview, setPreview] = useState(null)
   const [saved,   setSaved]   = useState(null)
@@ -139,6 +141,19 @@ export function BillForm({ type, setPage, company }) {
     custApi.list().then(setCustomers).catch(()=>{})
     prodApi.list().then(setProductList).catch(()=>{})
   },[])
+
+  // Update template from company settings
+  useEffect(()=>{
+    if (company?.defaultTemplate && !f.templateId) {
+      setF(x => ({ ...x, templateId: company.defaultTemplate }))
+    }
+    if (company?.declaration && !f.declaration) {
+      setF(x => ({ ...x, declaration: company.declaration }))
+    }
+    if (company?.defaultTerms && !f.terms) {
+      setF(x => ({ ...x, terms: company.defaultTerms }))
+    }
+  }, [company])
 
   const cust    = customers.find(c=>c._id===f.customerId)
   const isIntra = !!(cust && company?.state && cust.state===company.state)
@@ -156,15 +171,20 @@ export function BillForm({ type, setPage, company }) {
     }
     setF(x=>({...x,items}))
   }
-  const addItem = ()=>setF(x=>({...x,items:[...x.items,{id:genId(),productId:'',productName:'',qty:1,unit:'pcs',price:0,gstRate:18}]}))
+  const addItem = ()=>setF(x=>({...x,items:[...x.items,{id:genId(),productId:'',productName:'',hsnCode:'',qty:1,unit:'pcs',price:0,gstRate:18}]}))
   const remItem = idx=>setF(x=>({...x,items:x.items.filter((_,i)=>i!==idx)}))
 
   const buildPayload = () => ({
     date:f.date, ...(isEst?{validTill:f.validTill}:{dueDate:f.dueDate}),
     customerId:f.customerId||null, customerName:cust?.name||'', customer:cust||{},
+    billTo: cust ? { name:cust.name, address:cust.address, state:cust.state, gstin:cust.gstin } : {},
+    shipTo: cust ? { name:cust.name, address:cust.address, state:cust.state, gstin:cust.gstin } : {},
     items:f.items.map(i=>({...i,productId:i.productId||null})),
     sub, cgst, sgst, igst, discPct:f.disc||0, discAmt, total:grand,
-    isIntra, status:f.status, notes:f.notes, terms:f.terms, type
+    isIntra, status:f.status, notes:f.notes, terms:f.terms, type,
+    templateId: f.templateId,
+    declaration: f.declaration || company?.declaration || '',
+    placeOfSupply: f.placeOfSupply || cust?.state || ''
   })
 
   const doSave = async () => {
@@ -216,6 +236,12 @@ export function BillForm({ type, setPage, company }) {
           {customers.map(c=><option key={c._id} value={c._id}>{c.name}</option>)}
         </Sel>
         <Inp label="Discount %" type="number" min="0" max="100" value={f.disc} onChange={e=>upd('disc',parseFloat(e.target.value)||0)}/>
+        {!isEst && <Sel label="Invoice Template" value={f.templateId} onChange={e=>upd('templateId',e.target.value)}>
+          <option value="classic-tally">📋 Classic Tally</option>
+          <option value="modern-itc">💳 Modern ITC</option>
+          <option value="premium-tata">👑 Premium TATA</option>
+          <option value="simple-gst">📄 Simple GST</option>
+        </Sel>}
       </div>
 
       {cust && (
@@ -226,6 +252,9 @@ export function BillForm({ type, setPage, company }) {
             ))}
             <div><span className="text-slate-400 text-xs font-bold uppercase tracking-wider block mb-0.5">GST Type</span>
               <Bdg c={isIntra?'green':'blue'}>{isIntra?'⚡ Intra (CGST+SGST)':'🌐 Inter (IGST)'}</Bdg>
+            </div>
+            <div className="ml-auto">
+              <Inp label="Place of Supply" value={f.placeOfSupply || cust.state || ''} onChange={e=>upd('placeOfSupply',e.target.value)} placeholder="State name"/>
             </div>
           </div>
         </Card>
@@ -239,7 +268,7 @@ export function BillForm({ type, setPage, company }) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[860px]">
             <thead className="bg-slate-50 border-b border-slate-100">
-              <tr>{['Product / Description','Qty','Unit','Rate (₹)','GST%','Taxable','Tax','Total',''].map(h=>(
+              <tr>{['Product / Description','HSN/SAC','Qty','Unit','Rate (₹)','GST%','Taxable','Tax','Total',''].map(h=>(
                 <th key={h} className="px-3 py-2.5 text-left text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
               ))}</tr>
             </thead>
@@ -249,17 +278,18 @@ export function BillForm({ type, setPage, company }) {
                 const taxAmt=taxable*(item.gstRate||0)/100
                 return (
                   <tr key={item.id} className="border-t border-slate-50 hover:bg-slate-50/40">
-                    <td className="px-2 py-2 min-w-[200px]">
+                    <td className="px-2 py-2 min-w-[180px]">
                       <select className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-400" value={item.productId} onChange={e=>updItem(idx,'productId',e.target.value)}>
                         <option value="">— Select Product —</option>
                         {productList.map(p=><option key={p._id} value={p._id}>{p.name}</option>)}
                       </select>
                       <input className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs mt-1 focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="Or type description" value={item.productName} onChange={e=>updItem(idx,'productName',e.target.value)}/>
                     </td>
-                    <td className="px-2 py-2"><input type="number" min="0" className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-violet-400" value={item.qty} onChange={e=>updItem(idx,'qty',parseFloat(e.target.value)||0)}/></td>
-                    <td className="px-2 py-2"><select className="w-16 border border-slate-200 rounded-lg px-1 py-1.5 text-xs bg-white" value={item.unit} onChange={e=>updItem(idx,'unit',e.target.value)}>{UNITS.map(u=><option key={u}>{u}</option>)}</select></td>
-                    <td className="px-2 py-2"><input type="number" min="0" className="w-24 border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" value={item.price} onChange={e=>updItem(idx,'price',parseFloat(e.target.value)||0)}/></td>
-                    <td className="px-2 py-2"><select className="w-16 border border-slate-200 rounded-lg px-1 py-1.5 text-xs bg-white" value={item.gstRate} onChange={e=>updItem(idx,'gstRate',parseFloat(e.target.value))}>{GST_RATES.map(r=><option key={r} value={r}>{r}%</option>)}</select></td>
+                    <td className="px-1 py-2"><input type="text" className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="HSN" value={item.hsnCode || ''} onChange={e=>updItem(idx,'hsnCode',e.target.value)}/></td>
+                    <td className="px-2 py-2"><input type="number" min="0" className="w-14 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-violet-400" value={item.qty} onChange={e=>updItem(idx,'qty',parseFloat(e.target.value)||0)}/></td>
+                    <td className="px-2 py-2"><select className="w-14 border border-slate-200 rounded-lg px-1 py-1.5 text-xs bg-white" value={item.unit} onChange={e=>updItem(idx,'unit',e.target.value)}>{UNITS.map(u=><option key={u}>{u}</option>)}</select></td>
+                    <td className="px-2 py-2"><input type="number" min="0" className="w-20 border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-400" value={item.price} onChange={e=>updItem(idx,'price',parseFloat(e.target.value)||0)}/></td>
+                    <td className="px-2 py-2"><select className="w-14 border border-slate-200 rounded-lg px-1 py-1.5 text-xs bg-white" value={item.gstRate} onChange={e=>updItem(idx,'gstRate',parseFloat(e.target.value))}>{GST_RATES.map(r=><option key={r} value={r}>{r}%</option>)}</select></td>
                     <td className="px-3 py-2 text-sm text-slate-500">{fc(taxable)}</td>
                     <td className="px-3 py-2 text-sm text-slate-500">{fc(taxAmt)}</td>
                     <td className="px-3 py-2 text-sm font-bold text-slate-700">{fc(taxable+taxAmt)}</td>
@@ -281,9 +311,10 @@ export function BillForm({ type, setPage, company }) {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Inp label="Notes" textarea className="h-24" value={f.notes} onChange={e=>upd('notes',e.target.value)} placeholder="Thank you for your business!"/>
         <Inp label="Terms & Conditions" textarea className="h-24" value={f.terms} onChange={e=>upd('terms',e.target.value)}/>
+        <Inp label="Declaration" textarea className="h-24" value={f.declaration || company?.declaration || ''} onChange={e=>upd('declaration',e.target.value)} placeholder="We declare that this invoice..."/>
       </div>
       {preview && <BillPreview data={preview} onClose={()=>setPreview(null)}/>}
     </div>
@@ -420,6 +451,7 @@ const LIST_CFG = {
 
 export function ListPage({ type, setPage, company }) {
   const cfg = LIST_CFG[type]
+  const isEst = type === 'estimates'
   const [items,   setItems]   = useState([])
   const [loading, setLoading] = useState(true)
   const [search,  setSearch]  = useState('')
@@ -429,13 +461,29 @@ export function ListPage({ type, setPage, company }) {
   const load = () => { setLoading(true); cfg.api.list(search).then(d=>{ setItems(d); setLoading(false) }).catch(()=>setLoading(false)) }
   useEffect(load, [type])
 
-  const doDelete = async(id)=>{ await cfg.api.delete(id).catch(()=>{}); setItems(items.filter(i=>i._id!==id)); setDel(null) }
+  const doDelete = async(id)=>{ await cfg.api.remove(id).catch(()=>{}); setItems(items.filter(i=>i._id!==id)); setDel(null) }
   const updateStatus = async(id,status)=>{ await cfg.api.updateStatus?.(id,status).catch(()=>{}); setItems(items.map(i=>i._id===id?{...i,status}:i)) }
 
   const openPreview = (item) => setPreview({
-    ...item, items:item.items||[], customer:item.customer||{},
-    company:company||{}, type:type==='estimates'?'estimate':'sale'
+    ...item, 
+    items:item.items||[], 
+    customer:item.customer||{}, 
+    billTo:item.billTo||{}, 
+    shipTo:item.shipTo||{},
+    company:company||{}, 
+    type:type==='estimates'?'estimate':'sale',
+    templateId: item.templateId || company?.defaultTemplate || 'classic-tally'
   })
+
+  const doDuplicate = async (item) => {
+    if (!window.confirm(`Duplicate this ${isEst?'estimate':'invoice'}?`)) return
+    try {
+      const res = type === 'estimates' 
+        ? await estApi.duplicate(item._id) 
+        : await salesApi.duplicate(item._id)
+      setItems([res, ...items])
+    } catch(e) { alert(e.message) }
+  }
 
   const total = items.reduce((a,i)=>a+(i.total||0),0)
 
@@ -459,7 +507,7 @@ export function ListPage({ type, setPage, company }) {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-100">
-                <tr>{['Number','Date',type==='purchases'?'Supplier':'Customer','Amount','GST','Status','Actions'].map(h=>(
+                <tr>{['Number','Date',type==='purchases'?'Supplier':'Customer','Amount','GST','Paid','Pending','Status','Actions'].map(h=>(
                   <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}</tr>
               </thead>
@@ -473,6 +521,8 @@ export function ListPage({ type, setPage, company }) {
                       <td className="px-4 py-3 text-sm text-slate-600">{item.customerName||item.supplierName||'—'}</td>
                       <td className="px-4 py-3 text-sm font-bold text-violet-600">{fc(item.total)}</td>
                       <td className="px-4 py-3 text-sm text-slate-400">{fc(tax)}</td>
+                      <td className="px-4 py-3 text-sm text-emerald-600">{fc(item.amountPaid || 0)}</td>
+                      <td className="px-4 py-3 text-sm text-orange-600">{fc((item.total || 0) - (item.amountPaid || 0))}</td>
                       <td className="px-4 py-3">
                         {type==='sales'
                           ? <select className="border border-slate-200 rounded-lg px-2 py-1 text-xs bg-white" value={item.status||'unpaid'} onChange={e=>updateStatus(item._id,e.target.value)}>
@@ -483,7 +533,10 @@ export function ListPage({ type, setPage, company }) {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex gap-1.5">
-                          {type!=='purchases' && <Btn v="sec" sz="sm" onClick={()=>openPreview(item)}>View</Btn>}
+                          {type!=='purchases' && <>
+                            <Btn v="sec" sz="sm" onClick={()=>openPreview(item)}>View</Btn>
+                            <Btn v="pri" sz="sm" onClick={()=>doDuplicate(item)}>📋</Btn>
+                          </>}
                           <Btn v="gst" sz="sm" className="text-red-400 hover:bg-red-50" onClick={()=>setDel(item._id)}>Del</Btn>
                         </div>
                       </td>
@@ -531,7 +584,7 @@ export function CustomersPage() {
       setModal(false); setEdit(null); setF(blankCust)
     } catch(e){ alert(e.message) } finally { setSaving(false) }
   }
-  const del=async(id)=>{ if(!window.confirm('Delete?')) return; await custApi.delete(id).catch(()=>{}); setList(list.filter(c=>c._id!==id)) }
+  const del=async(id)=>{ if(!window.confirm('Delete?')) return; await custApi.remove(id).catch(()=>{}); setList(list.filter(c=>c._id!==id)) }
   const openEdit=(c)=>{ setF({name:c.name,mobile:c.mobile||'',email:c.email||'',address:c.address||'',state:c.state||'',gstin:c.gstin||'',type:c.type||'customer'}); setEdit(c._id); setModal(true) }
 
   return (
@@ -621,7 +674,7 @@ function RawMaterialsPanel() {
       setModal(false); setEdit(null); setF(blankRaw)
     } catch(e) { alert(e.message) } finally { setSaving(false) }
   }
-  const del = async (id) => { if (!window.confirm('Delete raw material?')) return; await rawMatApi.delete(id).catch(()=>{}); setList(list.filter(m=>m._id!==id)) }
+  const del = async (id) => { if (!window.confirm('Delete raw material?')) return; await rawMatApi.remove(id).catch(()=>{}); setList(list.filter(m=>m._id!==id)) }
   const openEdit = (m) => { setF({ name:m.name, sku:m.sku||'', category:m.category||'', unit:m.unit||'kg', costPrice:m.costPrice||0, gstRate:m.gstRate||18, stock:m.stock||0, minStock:m.minStock||5, description:m.description||'' }); setEdit(m._id); setModal(true) }
 
   return (
@@ -728,7 +781,7 @@ function FinishedProductsPanel() {
       setModal(false); setEdit(null); setF(blankProd2)
     } catch(e) { alert(e.message) } finally { setSaving(false) }
   }
-  const del = async (id) => { if (!window.confirm('Delete product?')) return; await prodApi.delete(id).catch(()=>{}); setList(list.filter(p=>p._id!==id)) }
+  const del = async (id) => { if (!window.confirm('Delete product?')) return; await prodApi.remove(id).catch(()=>{}); setList(list.filter(p=>p._id!==id)) }
   const openEdit = (p) => {
     setF({ name:p.name, sku:p.sku||'', category:p.category||'', unit:p.unit||'pcs', price:p.price||0, costPrice:p.costPrice||0, gstRate:p.gstRate||18, stock:p.stock||0, minStock:p.minStock||5, description:p.description||'', rawMaterials:p.rawMaterials||[] })
     setEdit(p._id); setModal(true)
@@ -1162,9 +1215,11 @@ export function SettingsPage({ onCompanyUpdate }) {
   const [f,setF]=useState(()=>{ try{ return JSON.parse(localStorage.getItem('sf_company')||'{}') }catch{ return {} } })
   const [saved,setSaved]=useState(false); const [loading,setLoad]=useState(false)
   const logoRef=useRef()
+  const sigRef=useRef()
 
   const upd=(k,v)=>setF(x=>({...x,[k]:v}))
   const handleLogo=(e)=>{ const file=e.target.files[0]; if(!file) return; const r=new FileReader(); r.onload=ev=>upd('logo',ev.target.result); r.readAsDataURL(file) }
+  const handleSig=(e)=>{ const file=e.target.files[0]; if(!file) return; const r=new FileReader(); r.onload=ev=>upd('signature',ev.target.result); r.readAsDataURL(file) }
 
   const save=async()=>{
     setLoad(true)
@@ -1243,12 +1298,35 @@ export function SettingsPage({ onCompanyUpdate }) {
           <div className="md:col-span-2">
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Default Bill Template</label>
             <div className="flex gap-2 flex-wrap">
-              {[{id:'modern-violet',name:'💜 Modern Violet'},{id:'classic-gold',name:'🥇 Classic Gold'},{id:'minimal-clean',name:'🤍 Minimal Clean'},{id:'corporate-blue',name:'💼 Corporate Blue'},{id:'bold-emerald',name:'💚 Bold Emerald'}].map(t=>(
+              {[
+                {id:'classic-tally',name:'📋 Classic Tally'},
+                {id:'modern-itc',name:'💳 Modern ITC'},
+                {id:'premium-tata',name:'👑 Premium TATA'},
+                {id:'simple-gst',name:'📄 Simple GST'}
+              ].map(t=>(
                 <button key={t.id} type="button" onClick={()=>upd('defaultTemplate',t.id)} className={`px-3 py-2 rounded-lg border text-sm font-bold transition-all ${f.defaultTemplate===t.id?'border-violet-500 bg-violet-50 text-violet-700':'border-slate-200 bg-white text-slate-600'}`}>{t.name}</button>
               ))}
             </div>
           </div>
           <div className="md:col-span-2"><Inp label="Default Terms & Conditions" textarea className="h-24" value={f.defaultTerms||''} onChange={e=>upd('defaultTerms',e.target.value)}/></div>
+          <div className="md:col-span-2"><Inp label="Declaration Text (shown on invoices)" textarea className="h-20" value={f.declaration||''} onChange={e=>upd('declaration',e.target.value)} placeholder="We declare that this invoice shows the actual price..." /></div>
+          <div className="md:col-span-2"><Inp label="Terms & Conditions" textarea className="h-20" value={f.termsConditions||''} onChange={e=>upd('termsConditions',e.target.value)} placeholder="Payment due within 30 days..." /></div>
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="font-black text-slate-700 mb-1">Digital Signature</h2>
+        <p className="text-xs text-slate-400 mb-4">Upload your digital signature to appear on invoices</p>
+        <div className="flex items-center gap-6">
+          <div className="w-32 h-16 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center bg-slate-50 overflow-hidden cursor-pointer hover:border-violet-400 transition-all" onClick={()=>sigRef.current.click()}>
+            {f.signature ? <img src={f.signature} className="w-full h-full object-contain p-1" alt="signature"/> : <div className="text-center text-slate-300"><div className="text-2xl mb-1">✍️</div><div className="text-xs">Upload</div></div>}
+          </div>
+          <div>
+            <input type="file" ref={sigRef} className="hidden" accept="image/*" onChange={handleSig}/>
+            <Btn v="sec" sz="sm" onClick={()=>sigRef.current.click()}>Upload Signature</Btn>
+            {f.signature && <button className="block text-xs text-red-400 mt-2" onClick={()=>upd('signature','')}>Remove</button>}
+            <p className="text-xs text-slate-400 mt-2">PNG, JPG · Transparent background preferred</p>
+          </div>
         </div>
       </Card>
 

@@ -36,7 +36,7 @@ async function req(method, path, body) {
 const get   = (path)       => req('GET',    path)
 const post  = (path, body) => req('POST',   path, body)
 const put   = (path, body) => req('PUT',    path, body)
-const patch = (path, body) => req('PATCH',  path, body)
+const patch = (path, body) => req('PATCH',   path, body)
 const del   = (path)       => req('DELETE', path)
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ export const auth = {
   logout:         ()   => clearToken(),
   isLoggedIn:     ()   => !!getToken(),
   getStoredUser:  ()   => { try { return JSON.parse(localStorage.getItem('sf_user') || 'null') } catch { return null } },
-  setStoredUser:  (u)  => localStorage.setItem('sf_user', JSON.stringify(u)),
+  setStoredUser:  (u)   => localStorage.setItem('sf_user', JSON.stringify(u)),
   clearStoredUser: ()  => localStorage.removeItem('sf_user'),
 }
 
@@ -62,7 +62,7 @@ export const customers = {
   get:    (id)   => get(`/customers/${id}`),
   create: (d)    => post('/customers', d),
   update: (id,d) => put(`/customers/${id}`, d),
-  delete: (id)   => del(`/customers/${id}`),
+  remove: (id)   => del(`/customers/${id}`),
 }
 
 // ── Raw Materials ─────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ export const rawMaterials = {
   create:      (d)    => post('/rawmaterials', d),
   update:      (id,d) => put(`/rawmaterials/${id}`, d),
   adjustStock: (id,d) => patch(`/rawmaterials/${id}/stock`, d),
-  delete:      (id)   => del(`/rawmaterials/${id}`),
+  remove:      (id)   => del(`/rawmaterials/${id}`),
 }
 
 // ── Products ──────────────────────────────────────────────────────────────────
@@ -82,16 +82,19 @@ export const products = {
   create:      (d)    => post('/products', d),
   update:      (id,d) => put(`/products/${id}`, d),
   adjustStock: (id,d) => patch(`/products/${id}/stock`, d),
-  delete:      (id)   => del(`/products/${id}`),
+  remove:      (id)   => del(`/products/${id}`),
 }
 
-// ── Sales ─────────────────────────────────────────────────────────────────────
+// ── Sales / Invoices ──────────────────────────────────────────────────────────
 export const sales = {
   list:         (q='',status='') => get(`/sales?q=${encodeURIComponent(q)}&status=${status}`),
-  get:          (id)   => get(`/sales/${id}`),
-  create:       (d)    => post('/sales', d),
-  updateStatus: (id,s) => patch(`/sales/${id}/status`, { status: s }),
-  delete:       (id)   => del(`/sales/${id}`),
+  get:          (id)             => get(`/sales/${id}`),
+  create:       (d)              => post('/sales', d),
+  update:       (id,d)           => put(`/sales/${id}`, d),
+  updateStatus: (id,s)           => patch(`/sales/${id}/status`, { status: s }),
+  updatePayment:(id,d)           => patch(`/sales/${id}/payment`, d),
+  duplicate:    (id)             => post(`/sales/${id}/duplicate`, {}),
+  remove:       (id)              => del(`/sales/${id}`),
 }
 
 // ── Purchases ─────────────────────────────────────────────────────────────────
@@ -99,7 +102,7 @@ export const purchases = {
   list:   (q='') => get(`/purchases${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   get:    (id)   => get(`/purchases/${id}`),
   create: (d)    => post('/purchases', d),
-  delete: (id)   => del(`/purchases/${id}`),
+  remove: (id)   => del(`/purchases/${id}`),
 }
 
 // ── Estimates ─────────────────────────────────────────────────────────────────
@@ -107,8 +110,10 @@ export const estimates = {
   list:         (q='') => get(`/estimates${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   get:          (id)   => get(`/estimates/${id}`),
   create:       (d)    => post('/estimates', d),
+  update:       (id,d) => put(`/estimates/${id}`, d),
   updateStatus: (id,s) => patch(`/estimates/${id}/status`, { status: s }),
-  delete:       (id)   => del(`/estimates/${id}`),
+  duplicate:    (id)   => post(`/estimates/${id}/duplicate`, {}),
+  remove:       (id)   => del(`/estimates/${id}`),
 }
 
 // ── Dashboard & Reports ───────────────────────────────────────────────────────

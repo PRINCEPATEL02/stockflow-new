@@ -18,7 +18,8 @@ router.put('/', async (req, res) => {
   try {
     const allowed = ['name','logo','address','state','pincode','gstin','pan','cin','msme',
       'mobile','email','website','bank','accName','accNo','ifsc','branch','upi',
-      'invoicePrefix','estimatePrefix','defaultTemplate','defaultTerms','footer']
+      'invoicePrefix','estimatePrefix','defaultTemplate','defaultTerms','footer',
+      'declaration','signature','termsConditions']
 
     const update = {}
     allowed.forEach(k => { if (req.body[k] !== undefined) update[k] = req.body[k] })

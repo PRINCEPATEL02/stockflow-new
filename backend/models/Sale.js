@@ -10,25 +10,41 @@ const lineItemSchema = new mongoose.Schema({
 }, { _id: false })
 
 const saleSchema = new mongoose.Schema({
-  userId:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  invoiceNo:    { type: String, required: true },
-  date:         { type: String, required: true },
-  dueDate:      { type: String, default: '' },
-  customerId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
-  customerName: { type: String, default: '' },
-  customer:     { type: Object, default: {} },
-  items:        [lineItemSchema],
-  sub:          { type: Number, default: 0 },
-  cgst:         { type: Number, default: 0 },
-  sgst:         { type: Number, default: 0 },
-  igst:         { type: Number, default: 0 },
-  discPct:      { type: Number, default: 0 },
-  discAmt:      { type: Number, default: 0 },
-  total:        { type: Number, default: 0 },
-  isIntra:      { type: Boolean, default: true },
-  status:       { type: String, enum: ['unpaid','paid','partial','overdue'], default: 'unpaid' },
-  notes:        { type: String, default: '' },
-  terms:        { type: String, default: '' },
+  userId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  invoiceNo:     { type: String, required: true },
+  date:          { type: String, required: true },
+  dueDate:       { type: String, default: '' },
+  customerId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
+  customerName:  { type: String, default: '' },
+  customer:      { type: Object, default: {} },
+  // Customer address details for billing
+  billTo:        { type: Object, default: {} },   // Billing address
+  shipTo:        { type: Object, default: {} },   // Shipping address
+  items:         [lineItemSchema],
+  sub:           { type: Number, default: 0 },
+  cgst:          { type: Number, default: 0 },
+  sgst:          { type: Number, default: 0 },
+  igst:          { type: Number, default: 0 },
+  discPct:       { type: Number, default: 0 },
+  discAmt:       { type: Number, default: 0 },
+  total:         { type: Number, default: 0 },
+  isIntra:       { type: Boolean, default: true },
+  // Payment tracking
+  status:        { type: String, enum: ['unpaid','paid','partial','overdue'], default: 'unpaid' },
+  amountPaid:    { type: Number, default: 0 },
+  paymentDate:   { type: String, default: '' },
+  paymentMethod: { type: String, default: '' },
+  // Additional fields
+  notes:         { type: String, default: '' },
+  terms:         { type: String, default: '' },
+  declaration:  { type: String, default: '' },
+  // Template and signature
+  templateId:    { type: String, default: 'classic-tally' },
+  signature:     { type: String, default: '' },
+  // Place of supply
+  placeOfSupply: { type: String, default: '' },
+  // HSN/SAC
+  hsnCode:       { type: String, default: '' },
 }, { timestamps: true })
 
 module.exports = mongoose.model('Sale', saleSchema)

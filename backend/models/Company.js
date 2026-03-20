@@ -20,11 +20,15 @@ const companySchema = new mongoose.Schema({
   ifsc:            { type: String, default: '' },
   branch:          { type: String, default: '' },
   upi:             { type: String, default: '' },
-  invoicePrefix:   { type: String, default: 'INV' },
-  estimatePrefix:  { type: String, default: 'EST' },
-  defaultTemplate:{ type: String, default: 'modern-violet' },
-  defaultTerms:    { type: String, default: '' },
-  footer:          { type: String, default: '' },
+  invoicePrefix:    { type: String, default: 'INV' },
+  estimatePrefix:   { type: String, default: 'EST' },
+  defaultTemplate:  { type: String, default: 'classic-tally' },
+  defaultTerms:     { type: String, default: '' },
+  footer:           { type: String, default: '' },
+  // New fields for enhanced billing
+  declaration:      { type: String, default: '' },  // Declaration text for invoices
+  signature:        { type: String, default: '' },  // Digital signature (base64)
+  termsConditions:  { type: String, default: '' },  // Additional terms
 }, { timestamps: true })
 
 module.exports = mongoose.model('Company', companySchema)

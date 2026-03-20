@@ -45,16 +45,24 @@ router.post('/', async (req, res) => {
 
     const {
       date, dueDate='', customerId=null, customerName='', customer={},
+      billTo={}, shipTo={},
       items=[], sub=0, cgst=0, sgst=0, igst=0,
       discPct=0, discAmt=0, total=0, isIntra=true,
-      status='unpaid', notes='', terms=''
+      status='unpaid', amountPaid=0, paymentDate='', paymentMethod='',
+      notes='', terms='', declaration='',
+      templateId='classic-tally', signature='',
+      placeOfSupply='', hsnCode=''
     } = req.body
 
     const sale = await Sale.create({
       userId: uid, invoiceNo, date, dueDate,
       customerId: customerId || null, customerName, customer,
+      billTo, shipTo,
       items, sub, cgst, sgst, igst, discPct, discAmt, total, isIntra,
-      status, notes, terms
+      status, amountPaid, paymentDate, paymentMethod,
+      notes, terms, declaration,
+      templateId, signature,
+      placeOfSupply, hsnCode
     })
 
     // Deduct stock for each linked product
@@ -91,6 +99,26 @@ router.post('/', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// PATCH /api/sales/:id/payment - Update payment details
+router.patch('/:id/payment', async (req, res) => {
+  try {
+    const { amountPaid, paymentDate, paymentMethod, status } = req.body
+    const update = {}
+    if (amountPaid !== undefined) update.amountPaid = amountPaid
+    if (paymentDate !== undefined) update.paymentDate = paymentDate
+    if (paymentMethod !== undefined) update.paymentMethod = paymentMethod
+    if (status !== undefined) update.status = status
+
+    const doc = await Sale.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
+      { $set: update },
+      { new: true }
+    )
+    if (!doc) return res.status(404).json({ error: 'Not found' })
+    res.json(doc)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
 // PATCH /api/sales/:id/status
 router.patch('/:id/status', async (req, res) => {
   try {
@@ -101,6 +129,51 @@ router.patch('/:id/status', async (req, res) => {
     )
     if (!doc) return res.status(404).json({ error: 'Not found' })
     res.json({ success: true, status: doc.status })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// POST /api/sales/:id/duplicate - Duplicate an invoice
+router.post('/:id/duplicate', async (req, res) => {
+  try {
+    const original = await Sale.findOne({ _id: req.params.id, userId: req.user._id })
+    if (!original) return res.status(404).json({ error: 'Not found' })
+
+    const uid = req.user._id
+    const count = await Sale.countDocuments({ userId: uid })
+    const co = await Company.findOne({ userId: uid })
+    const prefix = co?.invoicePrefix || 'INV'
+    const newInvoiceNo = `${prefix}-${String(count + 1).padStart(4, '0')}`
+
+    const duplicate = await Sale.create({
+      userId: uid,
+      invoiceNo: newInvoiceNo,
+      date: new Date().toISOString().split('T')[0],
+      dueDate: original.dueDate,
+      customerId: original.customerId,
+      customerName: original.customerName,
+      customer: original.customer,
+      billTo: original.billTo,
+      shipTo: original.shipTo,
+      items: original.items,
+      sub: original.sub,
+      cgst: original.cgst,
+      sgst: original.sgst,
+      igst: original.igst,
+      discPct: original.discPct,
+      discAmt: original.discAmt,
+      total: original.total,
+      isIntra: original.isIntra,
+      status: 'unpaid',
+      amountPaid: 0,
+      notes: original.notes,
+      terms: original.terms,
+      declaration: original.declaration,
+      templateId: original.templateId,
+      placeOfSupply: original.placeOfSupply,
+      hsnCode: original.hsnCode
+    })
+
+    res.status(201).json(duplicate)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
