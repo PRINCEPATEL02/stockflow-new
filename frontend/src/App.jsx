@@ -1,22 +1,38 @@
 import { useState, useEffect } from 'react'
 import { auth as authApi, company as coApi } from './utils/api'
 import LoginPage from './components/LoginPage'
+import ResetPasswordPage from './components/ResetPasswordPage'
 import Sidebar   from './components/Sidebar'
 import {
   Dashboard, BillForm, PurchaseForm, ListPage,
-  CustomersPage, ProductsPage, StockPage, ReportsPage, SettingsPage
+  CustomersPage, ProductsPage, StockPage, ReportsPage, SettingsPage, ProfilePage
 } from './pages/index.jsx'
 
 export default function App() {
+  // Set browser tab title
+  useEffect(() => {
+    document.title = 'StockFlow'
+  }, [])
+
   const [user,    setUser]    = useState(() => authApi.getStoredUser())
   const [company, setCompany] = useState(() => { try { return JSON.parse(localStorage.getItem('sf_company') || 'null') } catch { return null } })
   const [page,    setPage]    = useState('dashboard')
 
-  // Load company whenever user logs in
+  // Check for reset token in URL
+  const resetToken = new URLSearchParams(window.location.search).get('reset_token')
+  if (resetToken) {
+    return <ResetPasswordPage />
+  }
+
+  // Load company and user profile whenever user logs in
   useEffect(() => {
     if (!user) return
     coApi.get()
       .then(c => { setCompany(c); localStorage.setItem('sf_company', JSON.stringify(c)) })
+      .catch(() => {})
+    // Also fetch user profile to get email
+    authApi.getProfile()
+      .then(u => { setUser(u); localStorage.setItem('sf_user', JSON.stringify(u)) })
       .catch(() => {})
   }, [user])
 
@@ -50,7 +66,8 @@ export default function App() {
       case 'all-products':  return <ProductsPage/>
       case 'stock':         return <StockPage/>
       case 'reports':       return <ReportsPage/>
-      case 'settings':      return <SettingsPage   onCompanyUpdate={handleCompanyUpdate}/>
+      case 'settings':      return <SettingsPage user={user} onUserUpdate={setUser} onCompanyUpdate={handleCompanyUpdate}/>
+      case 'profile':       return <ProfilePage user={user} onUserUpdate={setUser}/>
       default:              return <Dashboard     setPage={setPage}/>
     }
   }

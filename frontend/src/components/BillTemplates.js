@@ -813,7 +813,7 @@ const TemplatePremiumTata = {
           </div>
         </div>
         
-        <div class="payment-grid">
+        <div class="payment-grid" style="grid-template-columns:1fr">
           <div class="bank-card">
             <div class="bank-header">🏦 Bank Details</div>
             <div class="bank-row">
@@ -824,13 +824,6 @@ const TemplatePremiumTata = {
               ${company.branch ? `<div><strong>Branch:</strong> ${esc(company.branch)}</div>` : ''}
               ${company.upi ? `<div><strong>UPI:</strong> ${esc(company.upi)}</div>` : ''}
             </div>
-          </div>
-          <div class="qr-card">
-            <div class="qr-header">📱 Scan & Pay</div>
-            ${qrData ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=130x130&data=${encodeURIComponent(qrData)}" class="qr-img"/>` : `
-              <div style="width:130px;height:130px;background:#f0f0f0;margin:0 auto;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#999;font-size:9px">QR Code</div>
-            `}
-            <div class="qr-sub">UPI / Google Pay / PhonePe</div>
           </div>
         </div>
         

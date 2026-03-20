@@ -1,12 +1,31 @@
-export const Inp = ({ label, className='', textarea=false, ...p }) => (
+import { useState } from 'react'
+
+export const Inp = ({ label, className='', textarea=false, toggle=false, type='text', ...p }) => {
+  const [showPassword, setShowPassword] = useState(false)
+  const inputType = toggle ? (showPassword ? 'text' : 'password') : type
+  const toggleIcon = showPassword ? '👁' : '👁‍🗨'
+  
+  return (
   <div className="flex flex-col gap-1">
     {label && <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{label}</label>}
     {textarea
       ? <textarea className={`border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white resize-none ${className}`} {...p}/>
-      : <input    className={`border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white ${className}`} {...p}/>
+      : <div className="relative">
+          <input type={inputType} className={`border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 bg-white w-full pr-10 ${className}`} {...p}/>
+          {toggle && (
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-violet-400 hover:text-violet-600 text-lg cursor-pointer"
+            >
+              {toggleIcon}
+            </button>
+          )}
+        </div>
     }
   </div>
 )
+}
 
 export const Sel = ({ label, children, ...p }) => (
   <div className="flex flex-col gap-1">
@@ -22,7 +41,7 @@ export const Btn = ({ children, v='pri', sz='md', className='', ...p }) => {
 }
 
 export const Card = ({ children, className='' }) => (
-  <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm ${className}`}>{children}</div>
+  <div className={`bg-white rounded-xl border border-slate-200 shadow-sm ${className}`}>{children}</div>
 )
 
 export const Bdg = ({ children, c='slate' }) => {

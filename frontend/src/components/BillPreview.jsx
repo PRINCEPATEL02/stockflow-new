@@ -574,8 +574,8 @@ function LivePreview({ data, templateId }) {
         </div>
       </div>
 
-      {/* Bank & QR */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, padding:'0 25px 18px' }}>
+      {/* Bank Details */}
+      <div style={{ padding:'0 25px 18px' }}>
         <div style={{ background:'#f8f9fa', borderRadius:12, padding:16, border:'1px solid #e9ecef' }}>
           <div style={{ fontSize:11, fontWeight:800, color:'#1a1a2e', marginBottom:10, paddingBottom:8, borderBottom:'2px solid #e94560' }}>🏦 Bank Details</div>
           <div style={{ fontSize:10, color:'#555', lineHeight:2 }}>
@@ -586,11 +586,6 @@ function LivePreview({ data, templateId }) {
             {company.branch && <div><strong>Branch:</strong> {company.branch}</div>}
             {company.upi && <div><strong>UPI:</strong> {company.upi}</div>}
           </div>
-        </div>
-        <div style={{ background:'#f8f9fa', borderRadius:12, padding:16, textAlign:'center', border:'1px solid #e9ecef' }}>
-          <div style={{ fontSize:11, fontWeight:800, color:'#1a1a2e', marginBottom:10 }}>📱 Scan & Pay</div>
-          <div style={{ width:110, height:110, background:'#f0f0f0', margin:'0 auto', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', color:'#999', fontSize:9 }}>QR Code</div>
-          <div style={{ fontSize:9, color:'#888', marginTop:8 }}>UPI / GPay / PhonePe</div>
         </div>
       </div>
 

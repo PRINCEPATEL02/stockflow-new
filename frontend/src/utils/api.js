@@ -41,13 +41,18 @@ const del   = (path)       => req('DELETE', path)
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const auth = {
-  register:       (d)  => post('/auth/register', d).then(r => { setToken(r.token); return r }),
-  login:          (d)  => post('/auth/login',    d).then(r => { setToken(r.token); return r }),
-  logout:         ()   => clearToken(),
-  isLoggedIn:     ()   => !!getToken(),
-  getStoredUser:  ()   => { try { return JSON.parse(localStorage.getItem('sf_user') || 'null') } catch { return null } },
-  setStoredUser:  (u)   => localStorage.setItem('sf_user', JSON.stringify(u)),
-  clearStoredUser: ()  => localStorage.removeItem('sf_user'),
+  register:        (d)  => post('/auth/register', d).then(r => { setToken(r.token); return r }),
+  login:           (d)  => post('/auth/login',    d).then(r => { setToken(r.token); return r }),
+  logout:          ()   => clearToken(),
+  isLoggedIn:      ()   => !!getToken(),
+  getStoredUser:   ()   => { try { return JSON.parse(localStorage.getItem('sf_user') || 'null') } catch { return null } },
+  setStoredUser:   (u)   => localStorage.setItem('sf_user', JSON.stringify(u)),
+  clearStoredUser: ()   => localStorage.removeItem('sf_user'),
+  forgotPassword:  (d)  => post('/auth/forgot-password', d),
+  resetPassword:   (token, d) => post(`/auth/reset-password/${token}`, d),
+  changePassword:  (d)  => post('/auth/change-password', d),
+  updateProfile:  (d)  => post('/auth/update-profile', d),
+  getProfile:   ()   => get('/auth/me'),
 }
 
 // ── Company ───────────────────────────────────────────────────────────────────

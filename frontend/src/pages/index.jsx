@@ -3,7 +3,7 @@ import {
   dashboard as dashApi, sales as salesApi, purchases as purchApi,
   estimates as estApi, customers as custApi, products as prodApi,
   rawMaterials as rawMatApi, reports as repApi,
-  company as coApi
+  company as coApi, auth
 } from '../utils/api'
 import { TEMPLATES } from '../components/BillTemplates'
 import { genId, fc, fd, todayStr, calcTotals, numToWords, STATES, GST_RATES, UNITS } from '../utils/helpers'
@@ -689,6 +689,7 @@ function RawMaterialsPanel() {
           </h2>
           <p className="text-xs text-slate-400 mt-0.5 ml-9">Purchase only · builds finished products</p>
         </div>
+        <Btn sz="sm" onClick={()=>{ setF(blankRaw); setEdit(null); setModal(true) }}>+ Add Raw Material</Btn>
       </div>
 
       {/* Search */}
@@ -1211,7 +1212,120 @@ export function ReportsPage() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // SETTINGS PAGE
 // ═══════════════════════════════════════════════════════════════════════════════
-export function SettingsPage({ onCompanyUpdate }) {
+// Change Password / Profile Component
+function ChangePassword({ user, onUserUpdate }) {
+  const [f, setF] = useState({ 
+    username: '', 
+    email: '',
+    currentPassword: '', 
+    newPassword: '', 
+    confirmPassword: '' 
+  })
+  const [err, setErr] = useState('')
+  const [success, setSuccess] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  // Sync form with user prop when it changes (to get email from database)
+  useEffect(() => {
+    // Also check localStorage directly for email
+    let storedUser = null
+    try {
+      storedUser = JSON.parse(localStorage.getItem('sf_user'))
+    } catch {}
+    
+    console.log('ChangePassword useEffect:', { user, storedUser })
+    
+    const email = user?.email || storedUser?.email || ''
+    const username = user?.username || storedUser?.username || ''
+    
+    setF(prev => ({
+      ...prev,
+      username,
+      email
+    }))
+  }, [user])
+
+  const updateProfile = async () => {
+    setErr(''); setSuccess('')
+    
+    // If changing password, validate password fields
+    if (f.newPassword) {
+      if (!f.currentPassword) {
+        setErr('Current password is required to change password')
+        return
+      }
+      if (f.newPassword.length < 4) {
+        setErr('New password must be at least 4 characters')
+        return
+      }
+      if (f.newPassword !== f.confirmPassword) {
+        setErr('New password and confirm password do not match')
+        return
+      }
+    }
+    
+    // Check if username or email changed
+    if (!f.username.trim()) {
+      setErr('Username is required')
+      return
+    }
+    
+    setLoading(true)
+    try {
+      const res = await auth.updateProfile({ 
+        username: f.username.trim(), 
+        email: f.email.trim(),
+        currentPassword: f.currentPassword || undefined,
+        newPassword: f.newPassword || undefined
+      })
+      setSuccess('Profile updated successfully!')
+      setF({ 
+        ...f, 
+        currentPassword: '', 
+        newPassword: '', 
+        confirmPassword: '' 
+      })
+      // Update user in parent component if callback provided
+      if (onUserUpdate && res.user) {
+        onUserUpdate(res.user)
+      }
+    } catch(e) {
+      setErr(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {err && <div className="bg-red-50 border border-red-100 text-red-600 text-sm px-4 py-2.5 rounded-xl">{err}</div>}
+      {success && <div className="bg-green-50 border border-green-100 text-green-700 text-sm px-4 py-2.5 rounded-xl">{success}</div>}
+      
+      {/* Username & Email */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Inp label="Username" value={f.username} onChange={e=>setF({...f,username:e.target.value})} placeholder="Enter username"/>
+        <Inp label="Email" type="email" value={f.email} onChange={e=>setF({...f,email:e.target.value})} placeholder="your@email.com"/>
+      </div>
+      
+      {/* Password Change (Optional) */}
+      <div className="border-t border-slate-200 pt-4">
+        <p className="text-sm text-slate-500 mb-3">Change password (optional - leave blank to keep current)</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Inp label="Current Password" type="password" toggle value={f.currentPassword} onChange={e=>setF({...f,currentPassword:e.target.value})} placeholder="Enter current password"/>
+          <Inp label="New Password" type="password" toggle value={f.newPassword} onChange={e=>setF({...f,newPassword:e.target.value})} placeholder="Enter new password"/>
+          <Inp label="Confirm Password" type="password" toggle value={f.confirmPassword} onChange={e=>setF({...f,confirmPassword:e.target.value})} placeholder="Confirm new password"/>
+        </div>
+      </div>
+      
+      <div>
+        <Btn onClick={updateProfile} disabled={loading}>{loading ? 'Saving...' : 'Save Changes'}</Btn>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+export function SettingsPage({ user, onUserUpdate, onCompanyUpdate }) {
   const [f,setF]=useState(()=>{ try{ return JSON.parse(localStorage.getItem('sf_company')||'{}') }catch{ return {} } })
   const [saved,setSaved]=useState(false); const [loading,setLoad]=useState(false)
   const logoRef=useRef()
@@ -1333,6 +1447,78 @@ export function SettingsPage({ onCompanyUpdate }) {
       <div className="flex justify-end pb-6">
         <Btn onClick={save} v={saved?'grn':'pri'} sz="lg" disabled={loading}>{loading?'Saving…':saved?'✓ All Settings Saved!':'Save All Settings'}</Btn>
       </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PROFILE PAGE
+// ═══════════════════════════════════════════════════════════════════════════════
+export function ProfilePage({ user, onUserUpdate }) {
+  const [loading, setLoading] = useState(false)
+  
+  const refreshProfile = async () => {
+    setLoading(true)
+    try {
+      const { auth } = await import('../utils/api')
+      const freshUser = await auth.getProfile()
+      onUserUpdate(freshUser)
+      localStorage.setItem('sf_user', JSON.stringify(freshUser))
+      alert('Profile refreshed!')
+    } catch(e) {
+      alert('Error: ' + e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <PageHeader title="My Profile" actions={
+        <Btn v="sec" onClick={refreshProfile} disabled={loading}>
+          {loading ? 'Refreshing...' : '↻ Refresh from Server'}
+        </Btn>
+      }/>
+
+      <Card className="p-6">
+        <h2 className="font-black text-slate-700 mb-4">👤 User Information</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-slate-50 p-4 rounded-xl">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Username</p>
+            <p className="font-semibold text-slate-700 text-lg">{user?.username || 'N/A'}</p>
+          </div>
+          <div className="bg-slate-50 p-4 rounded-xl">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Email</p>
+            <p className="font-semibold text-slate-700 text-lg">{user?.email || 'Not set'}</p>
+          </div>
+          <div className="bg-slate-50 p-4 rounded-xl">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">Full Name</p>
+            <p className="font-semibold text-slate-700 text-lg">{user?.name || 'N/A'}</p>
+          </div>
+          <div className="bg-slate-50 p-4 rounded-xl">
+            <p className="text-xs font-bold text-slate-400 uppercase mb-1">User ID</p>
+            <p className="font-semibold text-slate-600 text-xs font-mono">{user?.id || 'N/A'}</p>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="font-black text-slate-700 mb-4">🔐 Change Password</h2>
+        <ChangePassword user={user} onUserUpdate={onUserUpdate}/>
+      </Card>
+
+      <Card className="p-6">
+        <h2 className="font-black text-slate-700 mb-4">⏻ Sign Out</h2>
+        <p className="text-sm text-slate-500 mb-4">Ready to leave? Click the button below to sign out of your account.</p>
+        <Btn v="dan" onClick={() => {
+          if (window.confirm('Are you sure you want to sign out?')) {
+            localStorage.removeItem('sf_token')
+            localStorage.removeItem('sf_user')
+            localStorage.removeItem('sf_company')
+            window.location.href = '/'
+          }
+        }}>Sign Out</Btn>
+      </Card>
     </div>
   )
 }

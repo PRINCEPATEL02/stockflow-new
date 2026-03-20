@@ -10,6 +10,7 @@ const NAV = [
   { id:'stock',     ico:'▦', lbl:'Stock' },
   { id:'reports',   ico:'▤', lbl:'Reports' },
   { id:'settings',  ico:'⚙', lbl:'Settings' },
+  { id:'profile',   ico:'👤', lbl:'My Profile' },
 ]
 
 export default function Sidebar({ page, setPage, user, company, onLogout }) {
@@ -17,9 +18,9 @@ export default function Sidebar({ page, setPage, user, company, onLogout }) {
   const isActive = item => page===item.id || (item.sub && item.sub.some(s=>s.id===page))
 
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif"}} className="w-64 bg-slate-950 text-white flex flex-col h-screen fixed left-0 top-0 z-40">
+    <div style={{fontFamily:"'DM Sans',sans-serif"}} className="w-64 bg-slate-900 text-white flex flex-col h-screen fixed left-0 top-0 z-40 shadow-xl">
       {/* Brand */}
-      <div className="p-5 border-b border-white/10 flex-shrink-0">
+      <div className="p-5 border-b border-white/20 flex-shrink-0">
         <div className="flex items-center gap-3">
           {company?.logo
             ? <img src={company.logo} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" alt="logo"/>
@@ -41,7 +42,7 @@ export default function Sidebar({ page, setPage, user, company, onLogout }) {
             <button
               onClick={() => item.sub ? setExp(e=>({...e,[item.id]:!e[item.id]})) : setPage(item.id)}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-all ${
-                isActive(item) ? 'bg-violet-600 text-white' : 'text-slate-400 hover:bg-white/10 hover:text-white'
+                isActive(item) ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/10 hover:text-white'
               }`}
             >
               <div className="flex items-center gap-3">
@@ -51,11 +52,11 @@ export default function Sidebar({ page, setPage, user, company, onLogout }) {
               {item.sub && <span className="text-xs opacity-50">{exp[item.id]?'▾':'›'}</span>}
             </button>
             {item.sub && exp[item.id] && (
-              <div className="ml-7 mt-0.5 mb-1 border-l-2 border-white/10 pl-3 space-y-0.5">
+              <div className="ml-7 mt-0.5 mb-1 border-l-2 border-white/20 pl-3 space-y-0.5">
                 {item.sub.map(s => (
                   <button key={s.id} onClick={()=>setPage(s.id)}
                     className={`w-full text-left px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      page===s.id ? 'text-violet-300 bg-white/10' : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                      page===s.id ? 'text-white bg-white/20' : 'text-white/70 hover:text-white hover:bg-white/10'
                     }`}
                   >{s.lbl}</button>
                 ))}
@@ -65,13 +66,7 @@ export default function Sidebar({ page, setPage, user, company, onLogout }) {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-white/10 flex-shrink-0">
-        <div className="px-3 py-1 text-xs text-slate-600 mb-1">StockFlow Pro v2.0 · MongoDB</div>
-        <button onClick={onLogout} className="w-full flex items-center gap-2 px-3 py-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-xl text-xs font-medium transition-all">
-          <span>⏻</span><span>Sign Out</span>
-        </button>
-      </div>
+      
     </div>
   )
 }
