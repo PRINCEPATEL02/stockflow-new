@@ -73,7 +73,7 @@ export default function LoginPage({ onLogin }) {
         </div>
 
         {/* Card */}
-        <Card className="p-7 shadow-2xl shadow-violet-200/50">
+        <Card className="p-7 shadow-xl">
           <div className="flex flex-col gap-4">
             {mode==='register' && (
               <>
