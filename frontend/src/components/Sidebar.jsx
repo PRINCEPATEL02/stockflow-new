@@ -11,7 +11,6 @@ const NAV = [
   { id:'reports',   ico:'▤', lbl:'Reports' },
   { id:'warranty',  ico:'✓', lbl:'Warranty' },
   { id:'settings',  ico:'⚙', lbl:'Settings' },
-  { id:'profile',   ico:'👤', lbl:'My Profile' },
 ]
 
 export default function Sidebar({ page, setPage, user, company, onLogout }) {
@@ -67,6 +66,25 @@ export default function Sidebar({ page, setPage, user, company, onLogout }) {
         ))}
       </nav>
 
+      {/* Bottom Section - Profile & Logout */}
+      <div className="p-3 border-t border-white/20 space-y-1">
+        <button
+          onClick={() => setPage('profile')}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
+            page === 'profile' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-white/10 hover:text-white'
+          }`}
+        >
+          <span className="text-sm w-4 text-center">👤</span>
+          <span className="font-semibold">My Profile</span>
+        </button>
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all text-slate-400 hover:bg-red-500/20 hover:text-red-400"
+        >
+          <span className="text-sm w-4 text-center">↪</span>
+          <span className="font-semibold">Logout</span>
+        </button>
+      </div>
       
     </div>
   )

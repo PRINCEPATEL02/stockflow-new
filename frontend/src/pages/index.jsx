@@ -6,7 +6,7 @@ import {
   company as coApi, auth
 } from '../utils/api'
 import { TEMPLATES } from '../components/BillTemplates'
-import { genId, fc, fd, todayStr, dueDateStr, calcTotals, numToWords, STATES, GST_RATES, UNITS } from '../utils/helpers'
+import { genId, fc, fs, fd, todayStr, dueDateStr, calcTotals, numToWords, STATES, GST_RATES, UNITS } from '../utils/helpers'
 import { Inp, Sel, Btn, Card, Bdg, Modal, PageHeader, EmptyState, Spinner, ErrBanner } from '../components/ui'
 import BillPreview from '../components/BillPreview'
 import WarrantyModal from '../components/WarrantyModal'
@@ -85,7 +85,7 @@ export function Dashboard({ setPage }) {
               {rawMaterialsStock.slice(0,10).map(p=>(
                 <div key={p._id} className={`flex justify-between items-center p-2.5 rounded-xl ${p.stock===0?'bg-red-50':p.stock<=5?'bg-yellow-50':'bg-emerald-50'}`}>
                   <span className="text-xs font-semibold text-slate-700 truncate">{p.name}</span>
-                  <Bdg c={p.stock===0?'red':p.stock<=5?'yellow':'green'}>{p.stock} {p.unit}</Bdg>
+                  <Bdg c={p.stock===0?'red':p.stock<=5?'yellow':'green'}>{fs(p.stock)} {p.unit}</Bdg>
                 </div>
               ))}
             </div>
@@ -903,7 +903,7 @@ function RawMaterialsPanel() {
                 <div className="font-bold text-slate-700 text-sm truncate">{m.name}</div>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   {m.sku && <span className="text-xs text-slate-400">{m.sku}</span>}
-                  <span className={`text-xs px-1.5 py-0.5 rounded-md font-semibold ${(m.stock||0)===0?'bg-red-100 text-red-600':(m.stock||0)<=(m.minStock||5)?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700'}`}>{m.stock||0} {m.unit}</span>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-md font-semibold ${(m.stock||0)===0?'bg-red-100 text-red-600':(m.stock||0)<=(m.minStock||5)?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700'}`}>{fs(m.stock)} {m.unit}</span>
                   <span className="text-xs text-slate-400">{fc(m.costPrice)}/unit</span>
                   <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-md">{m.gstRate}% GST</span>
                 </div>
@@ -1025,7 +1025,7 @@ function FinishedProductsPanel() {
                   <div className="font-bold text-slate-700 text-sm truncate">{p.name}</div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     {p.sku && <span className="text-xs text-slate-400">{p.sku}</span>}
-                    <span className={`text-xs px-1.5 py-0.5 rounded-md font-semibold ${(p.stock||0)===0?'bg-red-100 text-red-600':(p.stock||0)<=(p.minStock||5)?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700'}`}>{p.stock||0} {p.unit}</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-md font-semibold ${(p.stock||0)===0?'bg-red-100 text-red-600':(p.stock||0)<=(p.minStock||5)?'bg-yellow-100 text-yellow-700':'bg-green-100 text-green-700'}`}>{fs(p.stock)} {p.unit}</span>
                     <span className="text-xs font-bold text-violet-600">{fc(p.price)}</span>
                     <span className={`text-xs px-1.5 py-0.5 rounded-md ${margin>=30?'bg-green-100 text-green-700':margin>=10?'bg-yellow-100 text-yellow-700':'bg-red-100 text-red-600'}`}>{margin}% margin</span>
                   </div>
@@ -1225,7 +1225,7 @@ export function StockPage() {
                       <td className="px-4 py-3 font-bold text-slate-700">{p.name}</td>
                       <td className="px-4 py-3 text-sm text-slate-400">{p.sku||'—'}</td>
                       <td className="px-4 py-3"><Bdg c="slate">{p.category||'General'}</Bdg></td>
-                      <td className="px-4 py-3"><span className="text-lg font-black text-slate-700">{stk}</span><span className="text-xs text-slate-400 ml-1">{p.unit}</span></td>
+                      <td className="px-4 py-3"><span className="text-lg font-black text-slate-700">{fs(stk)}</span><span className="text-xs text-slate-400 ml-1">{p.unit}</span></td>
                       <td className="px-4 py-3 text-sm text-slate-500">{min}</td>
                       <td className="px-4 py-3"><Bdg c={st==='out'?'red':st==='low'?'yellow':'green'}>{st==='out'?'Out of Stock':st==='low'?'Low Stock':'In Stock'}</Bdg></td>
                       <td className="px-4 py-3 text-sm font-semibold text-slate-600">{fc(stk*(p.costPrice||0))}</td>
@@ -1267,14 +1267,14 @@ export function StockPage() {
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-amber-800">Current Stock</span>
-              <span className="text-lg font-black text-amber-700">{selectedMat?.stock||0} {selectedMat?.unit}</span>
+              <span className="text-lg font-black text-amber-700">{fs(selectedMat?.stock)} {selectedMat?.unit}</span>
             </div>
           </div>
           <Inp label="Quantity (use negative to reduce)" type="number" value={stockQty} onChange={e=>setStockQty(parseInt(e.target.value)||0)}/>
           <div className={`border rounded-xl p-4 ${stockQty<0?'bg-red-50 border-red-200':stockQty>0?'bg-emerald-50 border-emerald-200':'bg-slate-50 border-slate-200'}`}>
             <div className="flex justify-between items-center">
               <span className={`text-sm ${stockQty<0?'text-red-800':stockQty>0?'text-emerald-800':'text-slate-600'}`}>New Stock Total</span>
-              <span className={`text-lg font-black ${stockQty<0?'text-red-700':stockQty>0?'text-emerald-700':'text-slate-600'}`}>{(selectedMat?.stock||0) + stockQty} {selectedMat?.unit}</span>
+              <span className={`text-lg font-black ${stockQty<0?'text-red-700':stockQty>0?'text-emerald-700':'text-slate-600'}`}>{fs((selectedMat?.stock||0) + stockQty)} {selectedMat?.unit}</span>
             </div>
           </div>
           <div className="flex gap-2 pt-2">

@@ -1,5 +1,11 @@
 export const genId    = () => Date.now().toString(36) + Math.random().toString(36).substr(2,5)
 export const fc       = (n) => '₹' + Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})
+export const fs       = (n) => {
+  const v = Number(n||0)
+  // Fix floating-point precision issues (e.g., 85.19999999999999 -> 85.20)
+  const fixed = Math.round(v * 100) / 100
+  return Number.isInteger(fixed) ? fixed.toString() : fixed.toFixed(2)
+}
 export const fd       = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—'
 export const todayStr = ()  => new Date().toISOString().split('T')[0]
 export const dueDateStr = (days=30) => {
