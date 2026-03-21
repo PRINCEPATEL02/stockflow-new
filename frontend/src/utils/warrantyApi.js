@@ -1,7 +1,7 @@
 const API_URL = '/api'
 
 // Get auth token
-const getToken = () => localStorage.getItem('token')
+const getToken = () => localStorage.getItem('sf_token')
 
 // Common fetch options
 const fetchOptions = (method = 'GET', body = null) => {

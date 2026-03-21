@@ -63,9 +63,12 @@ export const Modal = ({ title, onClose, children, w='max-w-3xl', open=true }) =>
   </div>
 )}
 
-export const PageHeader = ({ title, actions }) => (
+export const PageHeader = ({ title, subtitle, actions }) => (
   <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-    <h1 className="text-2xl font-black text-slate-800">{title}</h1>
+    <div>
+      <h1 className="text-2xl font-black text-slate-800">{title}</h1>
+      {subtitle && <p className="text-sm text-amber-600 font-semibold mt-1">{subtitle}</p>}
+    </div>
     <div className="flex gap-2 flex-wrap">{actions}</div>
   </div>
 )

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { createWarranty, checkWarrantyByBill } from '../utils/warrantyApi'
+import { createWarranty, checkWarrantyByBill, updateWarranty } from '../utils/warrantyApi'
 
 export default function WarrantyModal({ isOpen, onClose, sale, onSuccess }) {
   const [loading, setLoading] = useState(false)
@@ -72,8 +72,8 @@ export default function WarrantyModal({ isOpen, onClose, sale, onSuccess }) {
       }
 
       if (existingWarranty) {
-        // Update existing warranty - use PATCH logic via the same endpoint
-        await createWarranty({ ...warrantyData, _id: existingWarranty._id })
+        // Update existing warranty
+        await updateWarranty(existingWarranty._id, warrantyData)
       } else {
         await createWarranty(warrantyData)
       }

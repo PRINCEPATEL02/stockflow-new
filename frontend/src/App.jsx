@@ -128,11 +128,11 @@ function AppContent() {
     switch (page) {
       case 'dashboard':     return <Dashboard setPage={handlePageChange}/>
       case 'new-sale':      return <BillForm type="sale" setPage={handlePageChange} company={company}/>
-      case 'all-sales':     return <ListPage type="sales" setPage={handlePageChange} company={company}/>
+      case 'all-sales':     return <ListPage key="all-sales" type="sales" setPage={handlePageChange} company={company}/>
       case 'new-purchase':  return <PurchaseForm setPage={handlePageChange}/>
-      case 'all-purchases': return <ListPage type="purchases" setPage={handlePageChange} company={company}/>
+      case 'all-purchases': return <ListPage key="all-purchases" type="purchases" setPage={handlePageChange} company={company}/>
       case 'new-estimate':  return <BillForm type="estimate" setPage={handlePageChange} company={company}/>
-      case 'all-estimates': return <ListPage type="estimates" setPage={handlePageChange} company={company}/>
+      case 'all-estimates': return <ListPage key="all-estimates" type="estimates" setPage={handlePageChange} company={company}/>
       case 'customers':     return <CustomersPage/>
       case 'add-product':
       case 'all-products':  return <ProductsPage/>

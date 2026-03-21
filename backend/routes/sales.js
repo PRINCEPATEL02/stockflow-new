@@ -29,16 +29,20 @@ router.get('/', async (req, res) => {
     // Field selection - only return requested fields for list view
     const fieldList = fields ? fields.split(',').join(' ') : '-items -customer -billTo -shipTo -notes -terms -declaration -signature'
     
-    // Use lean() for faster query performance
-    const [list, total] = await Promise.all([
-      Sale.find(filter)
-        .select(fieldList)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      Sale.countDocuments(filter)
+    // Use lean() with aggregation to add first product name
+    const list = await Sale.aggregate([
+      { $match: filter },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limitNum },
+      { $project: {
+        invoiceNo: 1, date: 1, customerName: 1, total: 1, cgst: 1, sgst: 1, status: 1,
+        customerId: 1, isIntra: 1, amountPaid: 1, createdAt: 1,
+        firstProduct: { $arrayElemAt: ['$items.productName', 0] }
+      }}
     ])
+    
+    const total = await Sale.countDocuments(filter)
     
     res.json({
       data: list,
@@ -57,6 +61,79 @@ router.get('/:id', async (req, res) => {
   try {
     const doc = await Sale.findOne({ _id: req.params.id, userId: req.user._id })
     if (!doc) return res.status(404).json({ error: 'Not found' })
+    res.json(doc)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// PUT /api/sales/:id
+router.put('/:id', async (req, res) => {
+  try {
+    const doc = await Sale.findOne({ _id: req.params.id, userId: req.user._id })
+    if (!doc) return res.status(404).json({ error: 'Not found' })
+
+    const {
+      date, dueDate, customerId, customerName, customer,
+      billTo, shipTo,
+      items, sub, cgst, sgst, igst,
+      discPct, discAmt, total, isIntra,
+      status, amountPaid, paymentDate, paymentMethod,
+      notes, terms, declaration,
+      templateId, signature,
+      placeOfSupply, hsnCode
+    } = req.body
+
+    // If items changed, adjust stock
+    if (items && JSON.stringify(items) !== JSON.stringify(doc.items)) {
+      // Reverse old stock
+      if (doc.items && doc.items.length > 0) {
+        for (const item of doc.items.filter(i => i.productId)) {
+          await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -(item.qty || 0) } })
+        }
+      }
+      // Add new stock
+      if (items.length > 0) {
+        const bulkOps = items
+          .filter(i => i.productId)
+          .map(i => ({
+            updateOne: {
+              filter: { _id: i.productId, userId: req.user._id },
+              update: { $inc: { stock: i.qty || 0 } }
+            }
+          }))
+        if (bulkOps.length) await Product.bulkWrite(bulkOps)
+      }
+    }
+
+    // Update fields
+    doc.date = date || doc.date
+    doc.dueDate = dueDate || doc.dueDate
+    doc.customerId = customerId || doc.customerId
+    doc.customerName = customerName || doc.customerName
+    doc.customer = customer || doc.customer
+    doc.billTo = billTo || doc.billTo
+    doc.shipTo = shipTo || doc.shipTo
+    doc.items = items || doc.items
+    doc.sub = sub || doc.sub
+    doc.cgst = cgst || doc.cgst
+    doc.sgst = sgst || doc.sgst
+    doc.igst = igst || doc.igst
+    doc.discPct = discPct ?? doc.discPct
+    doc.discAmt = discAmt ?? doc.discAmt
+    doc.total = total || doc.total
+    doc.isIntra = isIntra ?? doc.isIntra
+    doc.status = status || doc.status
+    doc.amountPaid = amountPaid ?? doc.amountPaid
+    doc.paymentDate = paymentDate || doc.paymentDate
+    doc.paymentMethod = paymentMethod || doc.paymentMethod
+    doc.notes = notes || doc.notes
+    doc.terms = terms || doc.terms
+    doc.declaration = declaration || doc.declaration
+    doc.templateId = templateId || doc.templateId
+    doc.signature = signature || doc.signature
+    doc.placeOfSupply = placeOfSupply || doc.placeOfSupply
+    doc.hsnCode = hsnCode || doc.hsnCode
+
+    await doc.save()
     res.json(doc)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })

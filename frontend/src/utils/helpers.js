@@ -2,6 +2,11 @@ export const genId    = () => Date.now().toString(36) + Math.random().toString(3
 export const fc       = (n) => '₹' + Number(n||0).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})
 export const fd       = (d) => d ? new Date(d).toLocaleDateString('en-IN') : '—'
 export const todayStr = ()  => new Date().toISOString().split('T')[0]
+export const dueDateStr = (days=30) => {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
 
 export function calcTotals(items=[], isIntra=true) {
   let sub=0,cgst=0,sgst=0,igst=0

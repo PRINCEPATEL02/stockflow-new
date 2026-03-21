@@ -6,7 +6,7 @@ import {
   company as coApi, auth
 } from '../utils/api'
 import { TEMPLATES } from '../components/BillTemplates'
-import { genId, fc, fd, todayStr, calcTotals, numToWords, STATES, GST_RATES, UNITS } from '../utils/helpers'
+import { genId, fc, fd, todayStr, dueDateStr, calcTotals, numToWords, STATES, GST_RATES, UNITS } from '../utils/helpers'
 import { Inp, Sel, Btn, Card, Bdg, Modal, PageHeader, EmptyState, Spinner, ErrBanner } from '../components/ui'
 import BillPreview from '../components/BillPreview'
 import WarrantyModal from '../components/WarrantyModal'
@@ -126,10 +126,25 @@ export function BillForm({ type, setPage, company }) {
   const isEst = type === 'estimate'
   const [customers, setCustomers] = useState([])
   const [productList, setProductList] = useState([])
+  const [editBillData, setEditBillData] = useState(null)
+  
+  // Check for edit data in localStorage on mount
+  useEffect(() => {
+    try {
+      const data = localStorage.getItem('sf_edit_bill')
+      if (data) {
+        const parsed = JSON.parse(data)
+        // Clear the edit data after reading
+        localStorage.removeItem('sf_edit_bill')
+        setEditBillData(parsed)
+      }
+    } catch (e) {}
+  }, [])
+  
   const [f, setF] = useState({
-    date:todayStr(), dueDate:'', validTill:'', customerId:'',
+    date:todayStr(), dueDate:dueDateStr(), validTill:dueDateStr(), customerId:'',
     items:[{id:genId(),productId:'',productName:'',hsnCode:'',qty:1,unit:'pcs',price:0,gstRate:18}],
-    notes:'', terms:company?.defaultTerms||'Payment due within 30 days.', disc:0, status:'unpaid',
+    notes:'', terms:company?.defaultTerms||'Payment due within 30 days.', disc:0, status: isEst ? 'pending' : 'unpaid',
     templateId: company?.defaultTemplate || 'classic-tally',
     declaration: company?.declaration || '',
     placeOfSupply: ''
@@ -140,8 +155,9 @@ export function BillForm({ type, setPage, company }) {
   const [saving,  setSaving]  = useState(false)
 
   useEffect(()=>{
-    custApi.list().then(setCustomers).catch(()=>{})
-    prodApi.list().then(setProductList).catch(()=>{})
+    // Handle new paginated response format { data: [], pagination: {} }
+    custApi.list().then(d=>setCustomers(d.data || d)).catch(()=>{})
+    prodApi.list().then(d=>setProductList(d.data || d)).catch(()=>{})
   },[])
 
   // Update template from company settings
@@ -156,6 +172,30 @@ export function BillForm({ type, setPage, company }) {
       setF(x => ({ ...x, terms: company.defaultTerms }))
     }
   }, [company])
+  
+  // Populate form with edit data when loaded
+  useEffect(() => {
+    if (editBillData) {
+      setF({
+        date: editBillData.date || todayStr(),
+        dueDate: editBillData.dueDate || '',
+        validTill: editBillData.validTill || '',
+        customerId: editBillData.customerId || '',
+        items: editBillData.items && editBillData.items.length > 0 
+          ? editBillData.items.map(i => ({ ...i, id: genId() })) 
+          : [{id:genId(),productId:'',productName:'',hsnCode:'',qty:1,unit:'pcs',price:0,gstRate:18}],
+        notes: editBillData.notes || '',
+        terms: editBillData.terms || 'Payment due within 30 days.',
+        disc: editBillData.discPct || 0,
+        status: editBillData.status || (isEst ? 'pending' : 'unpaid'),
+        templateId: editBillData.templateId || 'classic-tally',
+        declaration: editBillData.declaration || '',
+        placeOfSupply: editBillData.placeOfSupply || '',
+        isEdit: true,
+        editId: editBillData._id || editBillData.editId
+      })
+    }
+  }, [editBillData])
 
   const cust    = customers.find(c=>c._id===f.customerId)
   const isIntra = !!(cust && company?.state && cust.state===company.state)
@@ -192,7 +232,14 @@ export function BillForm({ type, setPage, company }) {
   const doSave = async () => {
     setErr(''); setSaving(true)
     try {
-      const res = isEst ? await estApi.create(buildPayload()) : await salesApi.create(buildPayload())
+      let res
+      if (f.isEdit && f.editId) {
+        // Update existing record
+        res = isEst ? await estApi.update(f.editId, buildPayload()) : await salesApi.update(f.editId, buildPayload())
+      } else {
+        // Create new record
+        res = isEst ? await estApi.create(buildPayload()) : await salesApi.create(buildPayload())
+      }
       setSaved(res)
     } catch(e){ setErr(e.message) }
     finally { setSaving(false) }
@@ -201,22 +248,25 @@ export function BillForm({ type, setPage, company }) {
   if (saved) return (
     <div className="text-center py-20">
       <div className="text-5xl mb-4">🎉</div>
-      <h2 className="text-2xl font-black text-slate-800 mb-2">{isEst?'Estimate':'Invoice'} Created!</h2>
+      <h2 className="text-2xl font-black text-slate-800 mb-2">{isEst?'Estimate':'Invoice'} {f.isEdit ? 'Updated!' : 'Created!'}</h2>
       <p className="text-slate-500 mb-6">#{saved.invoiceNo||saved.estimateNo} · {fc(saved.total)}</p>
       <div className="flex gap-3 justify-center flex-wrap">
         <Btn onClick={()=>setPreview({...saved,company,isIntra:saved.isIntra,type})}>🖨 Preview & Print</Btn>
         <Btn v="sec" onClick={()=>setPage(isEst?'all-estimates':'all-sales')}>View All</Btn>
-        <Btn v="sec" onClick={()=>setSaved(null)}>Create Another</Btn>
+        <Btn v="sec" onClick={()=>setSaved(null)}>{f.isEdit ? 'Edit Another' : 'Create Another'}</Btn>
       </div>
       {preview && <BillPreview data={preview} onClose={()=>setPreview(null)}/>}
     </div>
   )
 
+  const formTitle = f.isEdit ? `Edit ${isEst?'Estimate':'Invoice'}` : `New ${isEst?'Estimate':'Invoice'}`
+  const editingInvoiceNo = f.isEdit && editBillData?.invoiceNo || editBillData?.estimateNo || null
+  
   return (
     <div className="space-y-5">
-      <PageHeader title={`New ${isEst?'Estimate':'Invoice'}`} actions={<>
+      <PageHeader title={formTitle} subtitle={editingInvoiceNo ? `Editing ${editingInvoiceNo}` : null} actions={<>
         <Btn v="sec" sz="sm" onClick={()=>setPreview({...buildPayload(),invoiceNo:'PREVIEW',company,isIntra})}>Preview</Btn>
-        <Btn sz="sm" onClick={doSave} disabled={saving}>{saving?'Saving…':'Save & Generate'}</Btn>
+        <Btn sz="sm" onClick={doSave} disabled={saving}>{saving?'Saving…':f.isEdit ? 'Update & Generate' : 'Save & Generate'}</Btn>
       </>}/>
       <ErrBanner msg={err} onClose={()=>setErr('')}/>
 
@@ -229,6 +279,7 @@ export function BillForm({ type, setPage, company }) {
       )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <Inp label={isEst ? "Estimate Date" : "Invoice Date"} type="date" value={f.date} onChange={e=>upd('date',e.target.value)}/>
         {isEst
           ? <Inp label="Valid Till" type="date" value={f.validTill} onChange={e=>upd('validTill',e.target.value)}/>
           : <Inp label="Due Date"   type="date" value={f.dueDate}   onChange={e=>upd('dueDate',e.target.value)}/>
@@ -285,7 +336,6 @@ export function BillForm({ type, setPage, company }) {
                         <option value="">— Select Product —</option>
                         {productList.map(p=><option key={p._id} value={p._id}>{p.name}</option>)}
                       </select>
-                      <input className="w-full border border-slate-200 rounded-lg px-2 py-1 text-xs mt-1 focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="Or type description" value={item.productName} onChange={e=>updItem(idx,'productName',e.target.value)}/>
                     </td>
                     <td className="px-1 py-2"><input type="text" className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-center focus:outline-none focus:ring-2 focus:ring-violet-400" placeholder="HSN" value={item.hsnCode || ''} onChange={e=>updItem(idx,'hsnCode',e.target.value)}/></td>
                     <td className="px-2 py-2"><input type="number" min="0" className="w-14 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-violet-400" value={item.qty} onChange={e=>updItem(idx,'qty',parseFloat(e.target.value)||0)}/></td>
@@ -328,12 +378,45 @@ export function BillForm({ type, setPage, company }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 export function PurchaseForm({ setPage }) {
   const [rawList,setRawList]=useState([])
+  const [editData,setEditData]=useState(null)
+  
+  // Check for edit data in localStorage on mount
+  useEffect(()=>{
+    try{
+      const data=localStorage.getItem('sf_edit_bill')
+      if(data){
+        const parsed=JSON.parse(data)
+        localStorage.removeItem('sf_edit_bill')
+        setEditData(parsed)
+      }
+    }catch(e){}
+  },[])
+  
   const [f,setF]=useState({date:todayStr(),supplierName:'',supplierGstin:'',billNo:'',items:[{id:genId(),rawMaterialId:'',productName:'',qty:1,unit:'kg',price:0,gstRate:18}],notes:'',status:'paid'})
   const [saved,setSaved]=useState(false)
   const [err,setErr]=useState('')
   const [saving,setSaving]=useState(false)
 
-  useEffect(()=>{ rawMatApi.list().then(setRawList).catch(()=>{}) },[])
+  // Populate form with edit data when loaded
+  useEffect(()=>{
+    if(editData){
+      setF({
+        date: editData.date || todayStr(),
+        supplierName: editData.supplierName || '',
+        supplierGstin: editData.supplierGstin || '',
+        billNo: editData.billNo || '',
+        items: editData.items && editData.items.length > 0
+          ? editData.items.map(i=>({...i,id:genId(),rawMaterialId:i.productId || i.rawMaterialId || ''}))
+          : [{id:genId(),rawMaterialId:'',productName:'',qty:1,unit:'kg',price:0,gstRate:18}],
+        notes: editData.notes || '',
+        status: editData.status || 'paid',
+        isEdit: true,
+        editId: editData._id
+      })
+    }
+  },[editData])
+
+  useEffect(()=>{ rawMatApi.list().then(d=>setRawList(d.data || d)).catch(()=>{}) },[])
 
   const {sub,cgst,sgst,total}=calcTotals(f.items,true)
   const upd=(k,v)=>setF(x=>({...x,[k]:v}))
@@ -348,7 +431,12 @@ export function PurchaseForm({ setPage }) {
   const doSave=async()=>{
     setErr(''); setSaving(true)
     try {
-      await purchApi.create({date:f.date,supplierName:f.supplierName,supplierGstin:f.supplierGstin,billNo:f.billNo,items:f.items.map(i=>({...i,rawMaterialId:i.rawMaterialId||null,productId:null})),sub,cgst,sgst,igst:0,total,status:f.status,notes:f.notes})
+      const payload={date:f.date,supplierName:f.supplierName,supplierGstin:f.supplierGstin,billNo:f.billNo,items:f.items.map(i=>({...i,rawMaterialId:i.rawMaterialId||null,productId:null})),sub,cgst,sgst,igst:0,total,status:f.status,notes:f.notes}
+      if(f.isEdit && f.editId){
+        await purchApi.update(f.editId,payload)
+      }else{
+        await purchApi.create(payload)
+      }
       setSaved(true)
     } catch(e){ setErr(e.message) }
     finally { setSaving(false) }
@@ -357,18 +445,18 @@ export function PurchaseForm({ setPage }) {
   if(saved) return (
     <div className="text-center py-20">
       <div className="text-5xl mb-4">✅</div>
-      <h2 className="text-2xl font-black text-slate-800 mb-2">Purchase Recorded!</h2>
-      <p className="text-slate-500 mb-6">Raw material stock updated automatically.</p>
+      <h2 className="text-2xl font-black text-slate-800 mb-2">{f.isEdit ? 'Purchase Updated!' : 'Purchase Recorded!'}</h2>
+      <p className="text-slate-500 mb-6">{f.isEdit ? 'Purchase updated successfully.' : 'Raw material stock updated automatically.'}</p>
       <div className="flex gap-3 justify-center">
         <Btn onClick={()=>setPage('all-purchases')}>View All Purchases</Btn>
-        <Btn v="sec" onClick={()=>setSaved(false)}>Add Another</Btn>
+        <Btn v="sec" onClick={()=>setSaved(false)}>{f.isEdit ? 'Edit Another' : 'Add Another'}</Btn>
       </div>
     </div>
   )
 
   return (
     <div className="space-y-5">
-      <PageHeader title="New Purchase" actions={<Btn sz="sm" onClick={doSave} disabled={saving}>{saving?'Saving…':'Save Purchase'}</Btn>}/>
+      <PageHeader title={f.isEdit ? 'Edit Purchase' : 'New Purchase'} actions={<Btn sz="sm" onClick={doSave} disabled={saving}>{saving?'Saving…':f.isEdit?'Update Purchase':'Save Purchase'}</Btn>}/>
       <ErrBanner msg={err} onClose={()=>setErr('')}/>
 
       {/* Info banner */}
@@ -463,31 +551,66 @@ export function ListPage({ type, setPage, company }) {
   const [warrantyModal, setWarrantyModal] = useState({ show: false, sale: null })
   const [warrantyStatus, setWarrantyStatus] = useState({})
 
-  const load = () => { setLoading(true); cfg.api.list(search).then(d=>{ setItems(d); setLoading(false) }).catch(()=>setLoading(false)) }
+  const load = () => { setLoading(true); cfg.api.list(search).then(d=>{ 
+    // Handle new paginated response format { data: [], pagination: {} }
+    setItems(d.data || d); 
+    setLoading(false) 
+  }).catch(()=>setLoading(false)) }
   useEffect(load, [type])
 
   const doDelete = async(id)=>{ await cfg.api.remove(id).catch(()=>{}); setItems(items.filter(i=>i._id!==id)); setDel(null) }
   const updateStatus = async(id,status)=>{ await cfg.api.updateStatus?.(id,status).catch(()=>{}); setItems(items.map(i=>i._id===id?{...i,status}:i)) }
 
-  const openPreview = (item) => setPreview({
-    ...item, 
-    items:item.items||[], 
-    customer:item.customer||{}, 
-    billTo:item.billTo||{}, 
-    shipTo:item.shipTo||{},
-    company:company||{}, 
-    type:type==='estimates'?'estimate':'sale',
-    templateId: item.templateId || company?.defaultTemplate || 'classic-tally'
-  })
-
-  const doDuplicate = async (item) => {
-    if (!window.confirm(`Duplicate this ${isEst?'estimate':'invoice'}?`)) return
+  // For edit functionality - store the item to edit
+  const [editItem, setEditItem] = useState(null)
+  
+  const openPreview = async (item) => {
+    // Fetch full record from API (list doesn't include items)
     try {
-      const res = type === 'estimates' 
-        ? await estApi.duplicate(item._id) 
-        : await salesApi.duplicate(item._id)
-      setItems([res, ...items])
-    } catch(e) { alert(e.message) }
+      const fullRecord = type === 'estimates' 
+        ? await estApi.get(item._id)
+        : type === 'purchases'
+          ? await purchApi.get(item._id)
+          : await salesApi.get(item._id)
+      
+      setPreview({
+        ...fullRecord,
+        items:fullRecord.items||[],
+        customer:fullRecord.customer||{},
+        billTo:fullRecord.billTo||{},
+        shipTo:fullRecord.shipTo||{},
+        company:company||{},
+        type:type==='estimates'?'estimate':'sale',
+        templateId: fullRecord.templateId || company?.defaultTemplate || 'classic-tally'
+      })
+    } catch (e) {
+      alert('Failed to load record: ' + e.message)
+    }
+  }
+
+  // Handle edit - navigate to new bill page with pre-filled data
+  const handleEdit = async (item) => {
+    // Fetch full record from API (list doesn't include items)
+    try {
+      const fullRecord = type === 'estimates' 
+        ? await estApi.get(item._id)
+        : type === 'purchases'
+          ? await purchApi.get(item._id)
+          : await salesApi.get(item._id)
+      
+      const editData = {
+        ...fullRecord,
+        isEdit: true,
+        editId: fullRecord._id,
+        type: type === 'estimates' ? 'estimate' : type === 'purchases' ? 'purchase' : 'sale'
+      }
+      localStorage.setItem('sf_edit_bill', JSON.stringify(editData))
+      // Navigate to correct bill page
+      const targetPage = type === 'estimates' ? 'new-estimate' : type === 'purchases' ? 'new-purchase' : 'new-sale'
+      setPage(targetPage)
+    } catch (e) {
+      alert('Failed to load record: ' + e.message)
+    }
   }
 
   const total = items.reduce((a,i)=>a+(i.total||0),0)
@@ -514,8 +637,14 @@ export function ListPage({ type, setPage, company }) {
     }
   }, [items, isSale])
 
-  const openWarrantyModal = (sale) => {
-    setWarrantyModal({ show: true, sale })
+  const openWarrantyModal = async (sale) => {
+    // Fetch full record for warranty (list doesn't include items)
+    try {
+      const fullRecord = await salesApi.get(sale._id)
+      setWarrantyModal({ show: true, sale: fullRecord })
+    } catch (e) {
+      alert('Failed to load record: ' + e.message)
+    }
   }
 
   const handleWarrantySuccess = (saleId) => {
@@ -543,8 +672,8 @@ export function ListPage({ type, setPage, company }) {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-100">
-                <tr>{['Number','Date',type==='purchases'?'Supplier':'Customer','Amount','GST','Paid','Pending','Status',isSale ? 'Warranty' : '','Actions'].map(h=>(
-                  <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                <tr>{['Number','Date',type==='purchases'?'Supplier':'Customer','Product','Amount','GST','Paid','Pending','Status',isSale ? 'Warranty' : '','Actions'].map(h=>(
+                  <th key={h} className={`px-4 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap ${h === 'Actions' ? 'text-right' : ''}`}>{h}</th>
                 ))}</tr>
               </thead>
               <tbody>
@@ -555,6 +684,7 @@ export function ListPage({ type, setPage, company }) {
                       <td className="px-4 py-3 font-bold text-slate-700 text-sm">{item[cfg.numKey]}</td>
                       <td className="px-4 py-3 text-sm text-slate-500">{fd(item.date)}</td>
                       <td className="px-4 py-3 text-sm text-slate-600">{item.customerName||item.supplierName||'—'}</td>
+                      <td className="px-4 py-3 text-sm text-slate-500 truncate max-w-[150px]" title={item.firstProduct}>{item.firstProduct||'-'}</td>
                       <td className="px-4 py-3 text-sm font-bold text-violet-600">{fc(item.total)}</td>
                       <td className="px-4 py-3 text-sm text-slate-400">{fc(tax)}</td>
                       <td className="px-4 py-3 text-sm text-emerald-600">{fc(item.amountPaid || 0)}</td>
@@ -567,25 +697,27 @@ export function ListPage({ type, setPage, company }) {
                           : <Bdg c={item.status==='paid'||item.status==='converted'?'green':'yellow'}>{item.status||'—'}</Bdg>
                         }
                       </td>
+                      {/* Warranty Column */}
                       <td className="px-4 py-3">
                         {isSale && (
                           <button
                             onClick={() => openWarrantyModal(item)}
-                            className={`mb-2 w-full px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                               warrantyStatus[item._id] === 'active'
                                 ? 'bg-green-100 text-green-700 hover:bg-green-200'
                                 : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
                             }`}
                           >
-                            {warrantyStatus[item._id] === 'active' ? '✓ Warranty' : '+ Warranty'}
+                            {warrantyStatus[item._id] === 'active' ? '✓ Active' : '+ Add'}
                           </button>
                         )}
-                        <div className="flex gap-1.5">
-                          {type!=='purchases' && <>
-                            <Btn v="sec" sz="sm" onClick={()=>openPreview(item)}>View</Btn>
-                            <Btn v="pri" sz="sm" onClick={()=>doDuplicate(item)}>📋</Btn>
-                          </>}
-                          <Btn v="gst" sz="sm" className="text-red-400 hover:bg-red-50" onClick={()=>setDel(item._id)}>Del</Btn>
+                      </td>
+                      {/* Actions Column */}
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1 items-end">
+                          <button onClick={()=>openPreview(item)} className="px-3 py-1.5 text-xs font-semibold bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">View</button>
+                          <button onClick={()=>handleEdit(item)} className="px-3 py-1.5 text-xs font-semibold bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors">Edit</button>
+                          <button onClick={()=>setDel(item._id)} className="px-3 py-1.5 text-xs font-semibold bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors">Del</button>
                         </div>
                       </td>
                     </tr>
@@ -630,7 +762,7 @@ export function CustomersPage() {
   const [modal,setModal]=useState(false); const [edit,setEdit]=useState(null)
   const [search,setSearch]=useState(''); const [f,setF]=useState(blankCust); const [saving,setSaving]=useState(false)
 
-  const load=()=>{ setLoading(true); custApi.list(search).then(d=>{ setList(d); setLoading(false) }).catch(()=>setLoading(false)) }
+  const load=()=>{ setLoading(true); custApi.list(search).then(d=>{ setList(d.data || d); setLoading(false) }).catch(()=>setLoading(false)) }
   useEffect(load,[])
 
   const save=async()=>{
@@ -720,7 +852,7 @@ function RawMaterialsPanel() {
   const [f,setF]             = useState(blankRaw)
   const [saving,setSaving]   = useState(false)
 
-  const load = () => { setLoading(true); rawMatApi.list(search).then(d=>{ setList(d); setLoading(false) }).catch(()=>setLoading(false)) }
+  const load = () => { setLoading(true); rawMatApi.list(search).then(d=>{ setList(d.data || d); setLoading(false) }).catch(()=>setLoading(false)) }
   useEffect(load, [])
 
   const save = async () => {
@@ -825,7 +957,7 @@ function FinishedProductsPanel() {
   const load = () => {
     setLoading(true)
     Promise.all([prodApi.list(search), rawMatApi.list()])
-      .then(([prods, raws]) => { setList(prods); setRawList(raws); setLoading(false) })
+      .then(([prods, raws]) => { setList(prods.data || prods); setRawList(raws.data || raws); setLoading(false) })
       .catch(() => setLoading(false))
   }
   useEffect(load, [])
@@ -1023,7 +1155,7 @@ export function StockPage() {
   const [stockQty,setStockQty]=useState(0)
   const [form,setForm]=useState({name:'',sku:'',category:'',unit:'kg',costPrice:0,stock:0,minStock:5})
 
-  useEffect(()=>{ rawMatApi.list().then(d=>{ setList(d); setLoading(false) }).catch(()=>setLoading(false)) },[])
+  useEffect(()=>{ rawMatApi.list().then(d=>{ setList(d.data || d); setLoading(false) }).catch(()=>setLoading(false)) },[])
 
   const adjust=async(id,delta,value)=>{
     const res=await rawMatApi.adjustStock(id,delta!==undefined?{delta}:{value}).catch(()=>null)
@@ -1579,3 +1711,4 @@ export function ProfilePage({ user, onUserUpdate }) {
     </div>
   )
 }
+

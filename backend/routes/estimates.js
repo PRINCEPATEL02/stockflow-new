@@ -27,16 +27,19 @@ router.get('/', async (req, res) => {
     // Field selection for list view
     const fieldList = '-items -customer -notes -terms'
     
-    // Use lean() for faster query
-    const [list, total] = await Promise.all([
-      Estimate.find(filter)
-        .select(fieldList)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      Estimate.countDocuments(filter)
+    // Use lean() with aggregation to add first product name
+    const list = await Estimate.aggregate([
+      { $match: filter },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limitNum },
+      { $project: {
+        estimateNo: 1, date: 1, customerName: 1, total: 1, cgst: 1, sgst: 1, status: 1,
+        customerId: 1, isIntra: 1, createdAt: 1,
+        firstProduct: { $arrayElemAt: ['$items.productName', 0] }
+      }}
     ])
+    const total = await Estimate.countDocuments(filter)
     
     res.json({
       data: list,
@@ -55,6 +58,43 @@ router.get('/:id', async (req, res) => {
   try {
     const doc = await Estimate.findOne({ _id: req.params.id, userId: req.user._id })
     if (!doc) return res.status(404).json({ error: 'Not found' })
+    res.json(doc)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+// PUT /api/estimates/:id
+router.put('/:id', async (req, res) => {
+  try {
+    const doc = await Estimate.findOne({ _id: req.params.id, userId: req.user._id })
+    if (!doc) return res.status(404).json({ error: 'Not found' })
+
+    const {
+      date, validTill, customerId, customerName, customer,
+      items, sub, cgst, sgst, igst,
+      discPct, discAmt, total, isIntra,
+      status, notes, terms
+    } = req.body
+
+    // Update fields
+    doc.date = date || doc.date
+    doc.validTill = validTill || doc.validTill
+    doc.customerId = customerId || doc.customerId
+    doc.customerName = customerName || doc.customerName
+    doc.customer = customer || doc.customer
+    doc.items = items || doc.items
+    doc.sub = sub ?? doc.sub
+    doc.cgst = cgst ?? doc.cgst
+    doc.sgst = sgst ?? doc.sgst
+    doc.igst = igst ?? doc.igst
+    doc.discPct = discPct ?? doc.discPct
+    doc.discAmt = discAmt ?? doc.discAmt
+    doc.total = total ?? doc.total
+    doc.isIntra = isIntra ?? doc.isIntra
+    doc.status = status || doc.status
+    doc.notes = notes || doc.notes
+    doc.terms = terms || doc.terms
+
+    await doc.save()
     res.json(doc)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })

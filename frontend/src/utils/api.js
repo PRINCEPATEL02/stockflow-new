@@ -10,7 +10,13 @@ async function req(method, path, body) {
   const headers = { 'Content-Type': 'application/json' }
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
-  const res = await fetch(`${BASE}${path}`, {
+  // Add cache-busting timestamp for GET requests
+  let url = `${BASE}${path}`
+  if (method === 'GET' && !path.includes('_t=')) {
+    const separator = path.includes('?') ? '&' : '?'
+    url += `${separator}_t=${Date.now()}`
+  }
+  const res = await fetch(url, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -107,6 +113,7 @@ export const purchases = {
   list:   (q='', status='', page=1, limit=50) => get(`/purchases?q=${encodeURIComponent(q)}&status=${status}&page=${page}&limit=${limit}`),
   get:    (id)   => get(`/purchases/${id}`),
   create: (d)    => post('/purchases', d),
+  update: (id,d) => put(`/purchases/${id}`, d),
   remove: (id)   => del(`/purchases/${id}`),
 }
 
