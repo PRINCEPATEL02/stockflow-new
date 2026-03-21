@@ -9,6 +9,7 @@ const NAV = [
   { id:'products',  ico:'◈', lbl:'Products',  sub:[{id:'add-product',lbl:'Add Product'},{id:'all-products',lbl:'All Products'}] },
   { id:'stock',     ico:'▦', lbl:'Stock' },
   { id:'reports',   ico:'▤', lbl:'Reports' },
+  { id:'warranty',  ico:'✓', lbl:'Warranty' },
   { id:'settings',  ico:'⚙', lbl:'Settings' },
   { id:'profile',   ico:'👤', lbl:'My Profile' },
 ]

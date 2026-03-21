@@ -5,18 +5,44 @@ const auth     = require('../middleware/auth')
 const router = express.Router()
 router.use(auth)
 
-// GET /api/customers?q=
+// GET /api/customers?q=&page=&limit=
 router.get('/', async (req, res) => {
   try {
-    const q = req.query.q
+    const { q='', page = 1, limit = 100, type } = req.query
     const filter = { userId: req.user._id }
+    
+    // Search filter
     if (q) filter.$or = [
       { name: new RegExp(q,'i') },
       { mobile: new RegExp(q,'i') },
       { gstin: new RegExp(q,'i') },
     ]
-    const list = await Customer.find(filter).sort({ name: 1 })
-    res.json(list)
+    if (type) filter.type = type
+    
+    // Pagination
+    const pageNum = Math.max(1, parseInt(page) || 1)
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 100))
+    const skip = (pageNum - 1) * limitNum
+    
+    // Use lean() for faster query
+    const [list, total] = await Promise.all([
+      Customer.find(filter)
+        .sort({ name: 1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Customer.countDocuments(filter)
+    ])
+    
+    res.json({
+      data: list,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum)
+      }
+    })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

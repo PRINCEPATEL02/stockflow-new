@@ -8,18 +8,47 @@ const auth    = require('../middleware/auth')
 const router = express.Router()
 router.use(auth)
 
-// GET /api/sales?q=&status=
+// GET /api/sales?q=&status=&page=&limit=&fields=
 router.get('/', async (req, res) => {
   try {
-    const { q='', status='' } = req.query
+    const { q='', status='', page = 1, limit = 50, fields } = req.query
     const filter = { userId: req.user._id }
+    
+    // Search filter with regex
     if (q) filter.$or = [
       { invoiceNo: new RegExp(q,'i') },
       { customerName: new RegExp(q,'i') },
     ]
     if (status) filter.status = status
-    const list = await Sale.find(filter).sort({ createdAt: -1 })
-    res.json(list)
+    
+    // Pagination
+    const pageNum = Math.max(1, parseInt(page) || 1)
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 50))
+    const skip = (pageNum - 1) * limitNum
+    
+    // Field selection - only return requested fields for list view
+    const fieldList = fields ? fields.split(',').join(' ') : '-items -customer -billTo -shipTo -notes -terms -declaration -signature'
+    
+    // Use lean() for faster query performance
+    const [list, total] = await Promise.all([
+      Sale.find(filter)
+        .select(fieldList)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Sale.countDocuments(filter)
+    ])
+    
+    res.json({
+      data: list,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum)
+      }
+    })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

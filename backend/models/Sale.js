@@ -11,11 +11,11 @@ const lineItemSchema = new mongoose.Schema({
 
 const saleSchema = new mongoose.Schema({
   userId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  invoiceNo:     { type: String, required: true },
-  date:          { type: String, required: true },
+  invoiceNo:     { type: String, required: true, index: true },
+  date:          { type: String, required: true, index: true },
   dueDate:       { type: String, default: '' },
-  customerId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
-  customerName:  { type: String, default: '' },
+  customerId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null, index: true },
+  customerName:  { type: String, default: '', index: true },
   customer:      { type: Object, default: {} },
   // Customer address details for billing
   billTo:        { type: Object, default: {} },   // Billing address
@@ -27,10 +27,10 @@ const saleSchema = new mongoose.Schema({
   igst:          { type: Number, default: 0 },
   discPct:       { type: Number, default: 0 },
   discAmt:       { type: Number, default: 0 },
-  total:         { type: Number, default: 0 },
+  total:         { type: Number, default: 0, index: true },
   isIntra:       { type: Boolean, default: true },
   // Payment tracking
-  status:        { type: String, enum: ['unpaid','paid','partial','overdue'], default: 'unpaid' },
+  status:        { type: String, enum: ['unpaid','paid','partial','overdue'], default: 'unpaid', index: true },
   amountPaid:    { type: Number, default: 0 },
   paymentDate:   { type: String, default: '' },
   paymentMethod: { type: String, default: '' },
@@ -46,5 +46,10 @@ const saleSchema = new mongoose.Schema({
   // HSN/SAC
   hsnCode:       { type: String, default: '' },
 }, { timestamps: true })
+
+// Compound index for efficient querying
+saleSchema.index({ userId: 1, createdAt: -1 })
+saleSchema.index({ userId: 1, status: 1 })
+saleSchema.index({ userId: 1, customerName: 'text' })
 
 module.exports = mongoose.model('Sale', saleSchema)

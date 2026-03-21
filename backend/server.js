@@ -3,7 +3,15 @@ const express   = require('express')
 const cors      = require('cors')
 const path      = require('path')
 const fs        = require('fs')
+const compression = require('compression')
+const NodeCache = require('node-cache')
 const connectDB = require('./config/db')
+
+// Initialize cache with 5-minute TTL for API responses
+const apiCache = new NodeCache({ stdTTL: 300, checkperiod: 60 })
+
+// Make cache available to routes
+global.apiCache = apiCache
 
 // Connect to MongoDB
 connectDB()
@@ -12,6 +20,17 @@ const app  = express()
 const PORT = process.env.PORT || 5000
 
 // ── Middleware ────────────────────────────────────────────────────────────────
+
+// Compression middleware for faster response
+app.use(compression({
+  threshold: 1024,
+  level: 6,
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false
+    return compression.filter(req, res)
+  }
+}))
+
 app.use(cors({
   origin: [
     'http://localhost:5173',
@@ -35,6 +54,7 @@ app.use('/api/purchases', require('./routes/purchases'))
 app.use('/api/estimates', require('./routes/estimates'))
 app.use('/api/dashboard', require('./routes/dashboard'))
 app.use('/api/reports',   require('./routes/reports'))
+app.use('/api/warranty',  require('./routes/warranty'))
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_, res) =>

@@ -63,7 +63,7 @@ export const company = {
 
 // ── Customers ─────────────────────────────────────────────────────────────────
 export const customers = {
-  list:   (q='') => get(`/customers${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  list:   (q='', type='', page=1, limit=100) => get(`/customers?q=${encodeURIComponent(q)}&type=${type}&page=${page}&limit=${limit}`),
   get:    (id)   => get(`/customers/${id}`),
   create: (d)    => post('/customers', d),
   update: (id,d) => put(`/customers/${id}`, d),
@@ -82,7 +82,7 @@ export const rawMaterials = {
 
 // ── Products ──────────────────────────────────────────────────────────────────
 export const products = {
-  list:        (q='') => get(`/products${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  list:        (q='', category='', page=1, limit=100) => get(`/products?q=${encodeURIComponent(q)}&category=${category}&page=${page}&limit=${limit}`),
   get:         (id)   => get(`/products/${id}`),
   create:      (d)    => post('/products', d),
   update:      (id,d) => put(`/products/${id}`, d),
@@ -92,7 +92,7 @@ export const products = {
 
 // ── Sales / Invoices ──────────────────────────────────────────────────────────
 export const sales = {
-  list:         (q='',status='') => get(`/sales?q=${encodeURIComponent(q)}&status=${status}`),
+  list:         (q='',status='', page=1, limit=50) => get(`/sales?q=${encodeURIComponent(q)}&status=${status}&page=${page}&limit=${limit}`),
   get:          (id)             => get(`/sales/${id}`),
   create:       (d)              => post('/sales', d),
   update:       (id,d)           => put(`/sales/${id}`, d),
@@ -104,7 +104,7 @@ export const sales = {
 
 // ── Purchases ─────────────────────────────────────────────────────────────────
 export const purchases = {
-  list:   (q='') => get(`/purchases${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  list:   (q='', status='', page=1, limit=50) => get(`/purchases?q=${encodeURIComponent(q)}&status=${status}&page=${page}&limit=${limit}`),
   get:    (id)   => get(`/purchases/${id}`),
   create: (d)    => post('/purchases', d),
   remove: (id)   => del(`/purchases/${id}`),
@@ -112,7 +112,7 @@ export const purchases = {
 
 // ── Estimates ─────────────────────────────────────────────────────────────────
 export const estimates = {
-  list:         (q='') => get(`/estimates${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  list:         (q='', page=1, limit=50) => get(`/estimates?q=${encodeURIComponent(q)}&page=${page}&limit=${limit}`),
   get:          (id)   => get(`/estimates/${id}`),
   create:       (d)    => post('/estimates', d),
   update:       (id,d) => put(`/estimates/${id}`, d),

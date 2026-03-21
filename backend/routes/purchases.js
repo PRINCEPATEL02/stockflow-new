@@ -7,17 +7,48 @@ const auth        = require('../middleware/auth')
 const router = express.Router()
 router.use(auth)
 
-// GET /api/purchases?q=
+// GET /api/purchases?q=&page=&limit=&status=
 router.get('/', async (req, res) => {
   try {
-    const { q='' } = req.query
+    const { q='', page = 1, limit = 50, status } = req.query
     const filter = { userId: req.user._id }
+    
+    // Search filter
     if (q) filter.$or = [
       { purchaseNo: new RegExp(q,'i') },
       { supplierName: new RegExp(q,'i') },
+      { billNo: new RegExp(q,'i') },
     ]
-    const list = await Purchase.find(filter).sort({ createdAt: -1 })
-    res.json(list)
+    if (status) filter.status = status
+    
+    // Pagination
+    const pageNum = Math.max(1, parseInt(page) || 1)
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 50))
+    const skip = (pageNum - 1) * limitNum
+    
+    // Field selection for list view
+    const fieldList = '-items -notes'
+    
+    // Use lean() for faster query
+    const [list, total] = await Promise.all([
+      Purchase.find(filter)
+        .select(fieldList)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Purchase.countDocuments(filter)
+    ])
+    
+    res.json({
+      data: list,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum)
+      }
+    })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

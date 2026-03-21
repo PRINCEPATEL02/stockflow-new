@@ -9,6 +9,8 @@ import { TEMPLATES } from '../components/BillTemplates'
 import { genId, fc, fd, todayStr, calcTotals, numToWords, STATES, GST_RATES, UNITS } from '../utils/helpers'
 import { Inp, Sel, Btn, Card, Bdg, Modal, PageHeader, EmptyState, Spinner, ErrBanner } from '../components/ui'
 import BillPreview from '../components/BillPreview'
+import WarrantyModal from '../components/WarrantyModal'
+import { checkWarrantyByBill } from '../utils/warrantyApi'
 
 
 export function Dashboard({ setPage }) {
@@ -452,11 +454,14 @@ const LIST_CFG = {
 export function ListPage({ type, setPage, company }) {
   const cfg = LIST_CFG[type]
   const isEst = type === 'estimates'
+  const isSale = type === 'sales'
   const [items,   setItems]   = useState([])
   const [loading, setLoading] = useState(true)
   const [search,  setSearch]  = useState('')
   const [preview, setPreview] = useState(null)
   const [del,     setDel]     = useState(null)
+  const [warrantyModal, setWarrantyModal] = useState({ show: false, sale: null })
+  const [warrantyStatus, setWarrantyStatus] = useState({})
 
   const load = () => { setLoading(true); cfg.api.list(search).then(d=>{ setItems(d); setLoading(false) }).catch(()=>setLoading(false)) }
   useEffect(load, [type])
@@ -487,6 +492,37 @@ export function ListPage({ type, setPage, company }) {
 
   const total = items.reduce((a,i)=>a+(i.total||0),0)
 
+  // Check warranty status for sales
+  const checkWarrantyStatus = async (item) => {
+    if (!isSale) return
+    try {
+      const res = await checkWarrantyByBill(item.invoiceNo)
+      setWarrantyStatus(prev => ({ ...prev, [item._id]: res.exists ? 'active' : 'none' }))
+    } catch {
+      setWarrantyStatus(prev => ({ ...prev, [item._id]: 'none' }))
+    }
+  }
+
+  // Load warranty status when items change
+  useEffect(() => {
+    if (isSale && items.length > 0) {
+      items.forEach(item => {
+        if (!warrantyStatus[item._id]) {
+          checkWarrantyStatus(item)
+        }
+      })
+    }
+  }, [items, isSale])
+
+  const openWarrantyModal = (sale) => {
+    setWarrantyModal({ show: true, sale })
+  }
+
+  const handleWarrantySuccess = (saleId) => {
+    setWarrantyStatus(prev => ({ ...prev, [saleId]: 'active' }))
+    setWarrantyModal({ show: false, sale: null })
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader title={`${cfg.title} (${items.length})`} actions={<>
@@ -507,7 +543,7 @@ export function ListPage({ type, setPage, company }) {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-100">
-                <tr>{['Number','Date',type==='purchases'?'Supplier':'Customer','Amount','GST','Paid','Pending','Status','Actions'].map(h=>(
+                <tr>{['Number','Date',type==='purchases'?'Supplier':'Customer','Amount','GST','Paid','Pending','Status',isSale ? 'Warranty' : '','Actions'].map(h=>(
                   <th key={h} className="px-4 py-3 text-left text-xs font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">{h}</th>
                 ))}</tr>
               </thead>
@@ -532,6 +568,18 @@ export function ListPage({ type, setPage, company }) {
                         }
                       </td>
                       <td className="px-4 py-3">
+                        {isSale && (
+                          <button
+                            onClick={() => openWarrantyModal(item)}
+                            className={`mb-2 w-full px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                              warrantyStatus[item._id] === 'active'
+                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                : 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                            }`}
+                          >
+                            {warrantyStatus[item._id] === 'active' ? '✓ Warranty' : '+ Warranty'}
+                          </button>
+                        )}
                         <div className="flex gap-1.5">
                           {type!=='purchases' && <>
                             <Btn v="sec" sz="sm" onClick={()=>openPreview(item)}>View</Btn>
@@ -558,6 +606,15 @@ export function ListPage({ type, setPage, company }) {
             <Btn v="sec" onClick={()=>setDel(null)}>Cancel</Btn>
           </div>
         </Modal>
+      )}
+
+      {warrantyModal.show && (
+        <WarrantyModal
+          isOpen={warrantyModal.show}
+          onClose={() => setWarrantyModal({ show: false, sale: null })}
+          sale={warrantyModal.sale}
+          onSuccess={() => handleWarrantySuccess(warrantyModal.sale?._id)}
+        />
       )}
     </div>
   )

@@ -6,17 +6,47 @@ const auth     = require('../middleware/auth')
 const router = express.Router()
 router.use(auth)
 
-// GET /api/estimates?q=
+// GET /api/estimates?q=&page=&limit=
 router.get('/', async (req, res) => {
   try {
-    const { q='' } = req.query
+    const { q='', page = 1, limit = 50, status } = req.query
     const filter = { userId: req.user._id }
+    
+    // Search filter
     if (q) filter.$or = [
       { estimateNo: new RegExp(q,'i') },
       { customerName: new RegExp(q,'i') },
     ]
-    const list = await Estimate.find(filter).sort({ createdAt: -1 })
-    res.json(list)
+    if (status) filter.status = status
+    
+    // Pagination
+    const pageNum = Math.max(1, parseInt(page) || 1)
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 50))
+    const skip = (pageNum - 1) * limitNum
+    
+    // Field selection for list view
+    const fieldList = '-items -customer -notes -terms'
+    
+    // Use lean() for faster query
+    const [list, total] = await Promise.all([
+      Estimate.find(filter)
+        .select(fieldList)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Estimate.countDocuments(filter)
+    ])
+    
+    res.json({
+      data: list,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum)
+      }
+    })
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 

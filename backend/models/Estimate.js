@@ -11,11 +11,11 @@ const lineItemSchema = new mongoose.Schema({
 
 const estimateSchema = new mongoose.Schema({
   userId:       { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  estimateNo:   { type: String, required: true },
-  date:         { type: String, required: true },
+  estimateNo:   { type: String, required: true, index: true },
+  date:         { type: String, required: true, index: true },
   validTill:    { type: String, default: '' },
-  customerId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
-  customerName: { type: String, default: '' },
+  customerId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null, index: true },
+  customerName: { type: String, default: '', index: true },
   customer:     { type: Object, default: {} },
   items:        [lineItemSchema],
   sub:          { type: Number, default: 0 },
@@ -24,11 +24,15 @@ const estimateSchema = new mongoose.Schema({
   igst:         { type: Number, default: 0 },
   discPct:      { type: Number, default: 0 },
   discAmt:      { type: Number, default: 0 },
-  total:        { type: Number, default: 0 },
+  total:        { type: Number, default: 0, index: true },
   isIntra:      { type: Boolean, default: true },
-  status:       { type: String, enum: ['pending','converted','expired'], default: 'pending' },
+  status:       { type: String, enum: ['pending','converted','expired'], default: 'pending', index: true },
   notes:        { type: String, default: '' },
   terms:        { type: String, default: '' },
 }, { timestamps: true })
+
+// Compound indexes for efficient queries
+estimateSchema.index({ userId: 1, createdAt: -1 })
+estimateSchema.index({ userId: 1, status: 1 })
 
 module.exports = mongoose.model('Estimate', estimateSchema)
