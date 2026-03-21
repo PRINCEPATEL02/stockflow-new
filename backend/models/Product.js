@@ -21,8 +21,11 @@ const productSchema = new mongoose.Schema({
   }],
 }, { timestamps: true })
 
-// Compound index for efficient queries
+// Compound indexes for efficient queries
 productSchema.index({ userId: 1, category: 1 })
-productSchema.index({ userId: 1, stock: { $lt: '$minStock' } })
+productSchema.index({ userId: 1, name: 1 })
+productSchema.index({ userId: 1, stock: 1, minStock: 1 })
+// Text index for full-text search (replaces slow regex)
+productSchema.index({ name: 'text', sku: 'text', category: 'text' })
 
 module.exports = mongoose.model('Product', productSchema)

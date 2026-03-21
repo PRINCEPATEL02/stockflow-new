@@ -84,7 +84,7 @@ router.get('/', async (req, res) => {
         Sale.countDocuments({ userId: uid, status: { $ne: 'paid' } }),
         Estimate.countDocuments({ userId: uid, status: 'pending' }),
         Sale.find({ userId: uid }).sort({ createdAt: -1 }).limit(6)
-                .select('invoiceNo date customerName total status'),
+                .select('invoiceNo date customerName total status').lean(),
       ])
 
     const totSales = totSalesArr[0]?.v || 0

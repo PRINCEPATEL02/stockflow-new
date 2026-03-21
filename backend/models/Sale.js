@@ -47,9 +47,11 @@ const saleSchema = new mongoose.Schema({
   hsnCode:       { type: String, default: '' },
 }, { timestamps: true })
 
-// Compound index for efficient querying
+// Compound indexes for efficient querying
 saleSchema.index({ userId: 1, createdAt: -1 })
 saleSchema.index({ userId: 1, status: 1 })
+saleSchema.index({ userId: 1, date: -1 })
 saleSchema.index({ userId: 1, customerName: 'text' })
+saleSchema.index({ userId: 1, status: 1, createdAt: -1 })
 
 module.exports = mongoose.model('Sale', saleSchema)

@@ -30,7 +30,7 @@ export function Dashboard({ setPage }) {
       </>}/>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
           {lbl:'Total Revenue',   val:fc(totSales),  ico:'↑',bg:'bg-emerald-50',tc:'text-emerald-600',bc:'border-emerald-100'},
           {lbl:'Total Purchases', val:fc(totPurch),  ico:'↓',bg:'bg-blue-50',   tc:'text-blue-600',   bc:'border-blue-100'},
@@ -52,7 +52,7 @@ export function Dashboard({ setPage }) {
       {/* Chart */}
       <Card className="p-6">
         <div className="flex justify-between items-center mb-5">
-          <h2 className="font-black text-slate-700">Sales vs Purchases — Last 6 Months</h2>
+          <h2 className="font-black text-slate-700 text-sm sm:text-base">Sales vs Purchases — Last 6 Months</h2>
           <div className="flex gap-4">
             <span className="flex items-center gap-1.5 text-xs text-slate-500"><span className="w-3 h-3 bg-violet-500 rounded-sm inline-block"></span>Sales</span>
             <span className="flex items-center gap-1.5 text-xs text-slate-500"><span className="w-3 h-3 bg-orange-400 rounded-sm inline-block"></span>Purchases</span>

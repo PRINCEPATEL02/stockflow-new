@@ -29,5 +29,8 @@ const purchaseSchema = new mongoose.Schema({
 // Compound indexes for efficient queries
 purchaseSchema.index({ userId: 1, createdAt: -1 })
 purchaseSchema.index({ userId: 1, supplierName: 1 })
+purchaseSchema.index({ userId: 1, status: 1 })
+purchaseSchema.index({ userId: 1, date: -1 })
+purchaseSchema.index({ userId: 1, status: 1, createdAt: -1 })
 
 module.exports = mongoose.model('Purchase', purchaseSchema)

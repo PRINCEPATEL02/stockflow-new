@@ -53,6 +53,7 @@ function AppContent() {
   })
   const [currentPage, setCurrentPage] = useState(() => urlPage || 'dashboard')
   const [initialized, setInitialized] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Sync state with URL on mount
   useEffect(() => {
@@ -102,6 +103,7 @@ function AppContent() {
   // Page change handler that updates both state and URL
   const handlePageChange = useCallback((page) => {
     setCurrentPage(page)
+    setSidebarOpen(false) // Close sidebar on mobile when navigating
     if (page === 'dashboard') {
       navigate('/')
     } else {
@@ -148,15 +150,41 @@ function AppContent() {
   return (
     <ProtectedRoute user={user}>
       <div className="bg-slate-50 min-h-screen">
-        <Sidebar
-          page={currentPage}
-          setPage={handlePageChange}
-          user={user}
-          company={company}
-          onLogout={handleLogout}
-        />
-        <main className="ml-64 min-h-screen">
-          <div className="max-w-7xl mx-auto p-6 lg:p-8">
+        {/* Mobile menu button */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="lg:hidden fixed top-4 left-4 z-50 p-2 rounded-lg bg-slate-900 text-white shadow-lg"
+          aria-label="Toggle menu"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {sidebarOpen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
+
+        {/* Sidebar overlay for mobile */}
+        {sidebarOpen && (
+          <div 
+            className="lg:hidden fixed inset-0 bg-black/50 z-30"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        <div className={`fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 lg:translate-x-0 lg:static ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <Sidebar
+            page={currentPage}
+            setPage={handlePageChange}
+            user={user}
+            company={company}
+            onLogout={handleLogout}
+          />
+        </div>
+        
+        <main className="lg:ml-64 min-h-screen pb-safe">
+          <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8 pt-16 lg:pt-8">
             <Suspense fallback={<PageLoader />}>
               {renderPage()}
             </Suspense>

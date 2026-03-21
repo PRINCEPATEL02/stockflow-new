@@ -13,4 +13,9 @@ const rawMaterialSchema = new mongoose.Schema({
   description: { type: String, default: '' },
 }, { timestamps: true })
 
+// Compound indexes for efficient queries
+rawMaterialSchema.index({ userId: 1, category: 1 })
+rawMaterialSchema.index({ userId: 1, stock: 1 })
+rawMaterialSchema.index({ name: 'text', sku: 'text' })
+
 module.exports = mongoose.model('RawMaterial', rawMaterialSchema)
