@@ -19,6 +19,7 @@ if (process.env.DATABASE_URL) {
     user: url.username,
     password: url.password,
     ssl: isSupabase ? { rejectUnauthorized: false } : false,
+    family: 4, // Force IPv4 to fix ENETUNREACH on Render
   }
 } else {
   // Use individual environment variables
@@ -28,6 +29,7 @@ if (process.env.DATABASE_URL) {
     database: process.env.PGDATABASE || 'stockflow',
     user: process.env.PGUSER || 'postgres',
     password: process.env.PGPASSWORD || 'postgres',
+    family: 4, // Force IPv4
   }
 }
 
