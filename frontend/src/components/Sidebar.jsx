@@ -18,7 +18,7 @@ export default function Sidebar({ page, setPage, user, company, onLogout }) {
   const isActive = item => page===item.id || (item.sub && item.sub.some(s=>s.id===page))
 
   return (
-    <div style={{fontFamily:"'DM Sans',sans-serif"}} className="w-64 bg-slate-900 text-white flex flex-col h-screen lg:fixed lg:left-0 lg:top-0 z-40 shadow-xl">
+    <div style={{fontFamily:"'DM Sans',sans-serif"}} className="w-64 bg-slate-900 text-white flex flex-col h-screen lg:fixed lg:left-0 lg:top-0 lg:bottom-0 z-40 shadow-xl overflow-hidden">
       {/* Brand */}
       <div className="p-5 border-b border-white/20 flex-shrink-0">
         <div className="flex items-center gap-3">

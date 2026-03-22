@@ -1,20 +1,36 @@
-const jwt  = require('jsonwebtoken')
+const jwt = require('jsonwebtoken')
 const User = require('../models/User')
 
-module.exports = async (req, res, next) => {
-  const header = req.headers.authorization || ''
-  const token  = header.startsWith('Bearer ') ? header.slice(7) : null
-  if (!token) return res.status(401).json({ error: 'No token — please login' })
-
+// Middleware to protect routes - expects JWT with user id
+const auth = async (req, res, next) => {
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET)
-    req.user = await User.findById(payload.id).select('-password')
-    if (!req.user) {
-      // Token is valid but user doesn't exist - clear token hint
-      return res.status(401).json({ error: 'User not found - please login again' })
+    const token = req.header('Authorization')?.replace('Bearer ', '')
+    
+    if (!token) {
+      return res.status(401).json({ error: 'Authentication required' })
     }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    
+    // Get user from database
+    const user = await User.findById(decoded.id)
+    
+    if (!user) {
+      return res.status(401).json({ error: 'User not found' })
+    }
+
+    // Attach user to request object
+    req.user = user
     next()
-  } catch {
-    res.status(401).json({ error: 'Invalid or expired token' })
+  } catch (err) {
+    if (err.name === 'JsonWebTokenError') {
+      return res.status(401).json({ error: 'Invalid token' })
+    }
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: 'Token expired' })
+    }
+    res.status(500).json({ error: 'Authentication error' })
   }
 }
+
+module.exports = auth

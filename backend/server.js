@@ -1,11 +1,11 @@
 require('dotenv').config()
-const express   = require('express')
-const cors      = require('cors')
-const path      = require('path')
-const fs        = require('fs')
+const express = require('express')
+const cors = require('cors')
+const path = require('path')
+const fs = require('fs')
 const compression = require('compression')
 const NodeCache = require('node-cache')
-const connectDB = require('./config/db')
+const { connectDB } = require('./config/db')
 
 // Initialize cache with 5-minute TTL for API responses
 const apiCache = new NodeCache({ stdTTL: 300, checkperiod: 60 })
@@ -13,10 +13,10 @@ const apiCache = new NodeCache({ stdTTL: 300, checkperiod: 60 })
 // Make cache available to routes
 global.apiCache = apiCache
 
-// Connect to MongoDB
+// Connect to PostgreSQL
 connectDB()
 
-const app  = express()
+const app = express()
 const PORT = process.env.PORT || 5000
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ app.use('/api/warranty',  require('./routes/warranty'))
 
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (_, res) =>
-  res.json({ status: 'ok', db: 'mongodb', time: new Date().toISOString() })
+  res.json({ status: 'ok', db: 'postgresql', time: new Date().toISOString() })
 )
 
 // ── Serve built React frontend in production ──────────────────────────────────
@@ -78,7 +78,7 @@ app.use((err, req, res, next) => {
 })
 
 app.listen(PORT, () => {
-  console.log(`\n🚀 StockFlow Pro (MongoDB) running → http://localhost:${PORT}`)
-  console.log(`   Database : ${process.env.MONGO_URI}`)
+  console.log(`\n🚀 StockFlow Pro (PostgreSQL) running → http://localhost:${PORT}`)
+  console.log(`   Database : ${process.env.PGDATABASE}`)
   console.log(`   Mode     : ${process.env.NODE_ENV || 'development'}\n`)
 })

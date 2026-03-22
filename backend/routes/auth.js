@@ -1,10 +1,10 @@
 const express = require('express')
-const jwt     = require('jsonwebtoken')
-const crypto  = require('crypto')
+const jwt = require('jsonwebtoken')
+const crypto = require('crypto')
 const nodemailer = require('nodemailer')
-const User    = require('../models/User')
+const User = require('../models/User')
 const Company = require('../models/Company')
-const auth    = require('../middleware/auth')
+const auth = require('../middleware/auth')
 
 // Email transporter
 const transporter = nodemailer.createTransport({
@@ -59,7 +59,7 @@ const sendResetEmail = async (email, resetUrl) => {
 const router = express.Router()
 
 const signToken = (user) =>
-  jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '30d' })
+  jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '30d' })
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
@@ -68,7 +68,7 @@ router.post('/register', async (req, res) => {
     if (!username?.trim() || !password?.trim())
       return res.status(400).json({ error: 'Username and password are required' })
 
-    const exists = await User.findOne({ username: username.trim().toLowerCase() })
+    const exists = await User.findByUsername(username.trim().toLowerCase())
     if (exists) return res.status(409).json({ error: 'Username already taken' })
 
     const user = await User.create({ 
@@ -79,10 +79,10 @@ router.post('/register', async (req, res) => {
     })
 
     // Auto-create empty company profile
-    await Company.create({ userId: user._id })
+    await Company.upsert(user.id, {})
 
     const token = signToken(user)
-    res.status(201).json({ token, user: { id: user._id, username: user.username, name: user.name, email: user.email } })
+    res.status(201).json({ token, user: { id: user.id, username: user.username, name: user.name, email: user.email } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -95,28 +95,26 @@ router.post('/login', async (req, res) => {
     if (!username?.trim() || !password?.trim())
       return res.status(400).json({ error: 'Username and password are required' })
 
-    const user = await User.findOne({ username: username.trim().toLowerCase() })
-    if (!user || !(await user.matchPassword(password)))
+    const user = await User.findByUsername(username.trim().toLowerCase())
+    if (!user || !(await User.matchPassword(user, password)))
       return res.status(401).json({ error: 'Invalid username or password' })
 
     // Ensure company profile exists
-    await Company.findOneAndUpdate(
-      { userId: user._id },
-      { $setOnInsert: { userId: user._id } },
-      { upsert: true, new: true }
-    )
+    const existingCompany = await Company.findByUserId(user.id)
+    if (!existingCompany) {
+      await Company.upsert(user.id, {})
+    }
 
     const token = signToken(user)
-    res.json({ token, user: { id: user._id, username: user.username, name: user.name, email: user.email } })
+    res.json({ token, user: { id: user.id, username: user.username, name: user.name, email: user.email } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
 })
 
 // GET /api/auth/me (legacy - kept for backward compatibility)
-// Note: There's a newer /me endpoint below that fetches from database
 router.get('/me', auth, (req, res) => {
-  res.json({ id: req.user._id, username: req.user.username, name: req.user.name, email: req.user.email, createdAt: req.user.createdAt })
+  res.json({ id: req.user.id, username: req.user.username, name: req.user.name, email: req.user.email, createdAt: req.user.created_at })
 })
 
 // GET /api/auth/test-email - Test email configuration
@@ -137,7 +135,7 @@ router.get('/test-email', async (req, res) => {
     // Try to send test email
     await transporter.sendMail({
       from: `"StockFlow Pro" <${process.env.EMAIL_USER}>`,
-      to: process.env.EMAIL_USER,  // Send to yourself
+      to: process.env.EMAIL_USER,
       subject: 'Test Email - StockFlow Pro',
       html: '<h1>Test Email</h1><p>Email configuration is working!</p>'
     })
@@ -158,12 +156,7 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     // Find user by username or email
-    const user = await User.findOne({ 
-      $or: [
-        { username: username?.trim().toLowerCase() },
-        { email: email?.trim().toLowerCase() }
-      ]
-    })
+    const user = await User.findByUsernameOrEmail(username?.trim().toLowerCase(), email?.trim().toLowerCase())
     if (!user) {
       // Don't reveal if user exists
       return res.json({ message: 'If username exists, new password has been sent to your email' })
@@ -171,26 +164,16 @@ router.post('/forgot-password', async (req, res) => {
 
     // Generate new random password
     const newPassword = Math.random().toString(36).slice(-8)
-    user.password = newPassword
-    await user.save()
+    await User.updatePassword(user.id, newPassword)
 
     const userEmail = user.email || email?.trim()
     
     // Send email with new password
     let emailSent = false
-    let emailError = ''
-    
-    console.log('Email config check:', {
-      hasUser: !!process.env.EMAIL_USER,
-      hasPass: !!process.env.EMAIL_PASS,
-      passValue: process.env.EMAIL_PASS?.substring(0, 4) + '...',
-      userEmail: !!userEmail
-    })
     
     if (userEmail && process.env.EMAIL_USER && process.env.EMAIL_PASS && process.env.EMAIL_PASS !== 'your_app_password_here') {
-      // Send new password via email
       try {
-        const info = await transporter.sendMail({
+        await transporter.sendMail({
           from: `"StockFlow Pro" <${process.env.EMAIL_USER}>`,
           to: userEmail,
           subject: '🔐 New Password - StockFlow Pro',
@@ -211,23 +194,14 @@ router.post('/forgot-password', async (req, res) => {
                 <p style="color: #666;">
                   Please login with these credentials and change your password in Settings after login.
                 </p>
-                <div style="text-align: center; margin: 30px 0;">
-                  <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}" style="background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
-                    Login Now
-                  </a>
-                </div>
               </div>
             </div>
           `
         })
-        console.log('Email sent successfully:', info.messageId)
         emailSent = true
       } catch (emailErr) {
-        emailError = emailErr.message
         console.error('Email send error:', emailErr.message)
       }
-    } else {
-      console.log('Email not sent - missing config or user email')
     }
     
     // Always log for development
@@ -243,7 +217,6 @@ router.post('/forgot-password', async (req, res) => {
     if (emailSent) {
       res.json({ message: 'New password has been sent to your email! Check your inbox.' })
     } else {
-      // If email not configured, show password in response (for testing)
       res.json({ 
         message: 'If username exists, new password has been sent to your email',
         username: user.username,
@@ -266,20 +239,12 @@ router.post('/reset-password/:token', async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 4 characters' })
     }
 
-    const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpire: { $gt: new Date() }
-    })
-
+    const user = await User.findByResetToken(token)
     if (!user) {
       return res.status(400).json({ error: 'Invalid or expired reset token' })
     }
 
-    user.password = password
-    user.resetPasswordToken = null
-    user.resetPasswordExpire = null
-    await user.save()
-
+    await User.updatePassword(user.id, password)
     res.json({ message: 'Password reset successful! You can now login with new password.' })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -289,8 +254,8 @@ router.post('/reset-password/:token', async (req, res) => {
 // GET /api/auth/me - Get current user profile
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password')
-    res.json({ id: user._id, username: user.username, name: user.name, email: user.email })
+    const user = await User.findById(req.user.id)
+    res.json({ id: user.id, username: user.username, name: user.name, email: user.email })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
@@ -309,14 +274,12 @@ router.post('/change-password', auth, async (req, res) => {
       return res.status(400).json({ error: 'New password must be at least 4 characters' })
     }
 
-    const user = await User.findById(req.user._id)
-    if (!(await user.matchPassword(currentPassword))) {
+    const user = await User.findById(req.user.id)
+    if (!(await User.matchPassword(user, currentPassword))) {
       return res.status(401).json({ error: 'Current password is incorrect' })
     }
 
-    user.password = newPassword
-    await user.save()
-
+    await User.updatePassword(user.id, newPassword)
     res.json({ message: 'Password changed successfully!' })
   } catch (err) {
     res.status(500).json({ error: err.message })
@@ -327,20 +290,14 @@ router.post('/change-password', auth, async (req, res) => {
 router.post('/update-profile', auth, async (req, res) => {
   try {
     const { username, email, currentPassword, newPassword } = req.body
-    const user = await User.findById(req.user._id)
+    const user = await User.findById(req.user.id)
     
     // Check if username is being changed and if it's already taken
     if (username && username.trim().toLowerCase() !== user.username) {
-      const existing = await User.findOne({ username: username.trim().toLowerCase() })
+      const existing = await User.findByUsername(username.trim().toLowerCase())
       if (existing) {
         return res.status(409).json({ error: 'Username already taken' })
       }
-      user.username = username.trim().toLowerCase()
-    }
-    
-    // Update email if provided
-    if (email !== undefined) {
-      user.email = email?.trim() || ''
     }
     
     // If changing password, verify current password first
@@ -348,19 +305,23 @@ router.post('/update-profile', auth, async (req, res) => {
       if (!currentPassword) {
         return res.status(400).json({ error: 'Current password is required to change password' })
       }
-      if (!(await user.matchPassword(currentPassword))) {
+      if (!(await User.matchPassword(user, currentPassword))) {
         return res.status(401).json({ error: 'Current password is incorrect' })
       }
       if (newPassword.length < 4) {
         return res.status(400).json({ error: 'New password must be at least 4 characters' })
       }
-      user.password = newPassword
     }
+
+    const updatedUser = await User.updateProfile(user.id, {
+      username: username?.trim().toLowerCase(),
+      email: email?.trim(),
+      password: newPassword
+    })
     
-    await user.save()
     res.json({ 
       message: 'Profile updated successfully!',
-      user: { id: user._id, username: user.username, name: user.name, email: user.email }
+      user: { id: updatedUser.id, username: updatedUser.username, name: updatedUser.name, email: updatedUser.email }
     })
   } catch (err) {
     res.status(500).json({ error: err.message })

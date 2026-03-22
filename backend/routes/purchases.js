@@ -1,8 +1,8 @@
-const express     = require('express')
-const Purchase    = require('../models/Purchase')
-const Product     = require('../models/Product')
+const express = require('express')
+const Purchase = require('../models/Purchase')
+const Product = require('../models/Product')
 const RawMaterial = require('../models/RawMaterial')
-const auth        = require('../middleware/auth')
+const auth = require('../middleware/auth')
 
 const router = express.Router()
 router.use(auth)
@@ -10,55 +10,16 @@ router.use(auth)
 // GET /api/purchases?q=&page=&limit=&status=
 router.get('/', async (req, res) => {
   try {
-    const { q='', page = 1, limit = 50, status } = req.query
-    const filter = { userId: req.user._id }
-    
-    // Search filter
-    if (q) filter.$or = [
-      { purchaseNo: new RegExp(q,'i') },
-      { supplierName: new RegExp(q,'i') },
-      { billNo: new RegExp(q,'i') },
-    ]
-    if (status) filter.status = status
-    
-    // Pagination
-    const pageNum = Math.max(1, parseInt(page) || 1)
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 50))
-    const skip = (pageNum - 1) * limitNum
-    
-    // Field selection for list view
-    const fieldList = '-items -notes'
-    
-    // Use lean() with aggregation to add first product name
-    const list = await Purchase.aggregate([
-      { $match: filter },
-      { $sort: { createdAt: -1 } },
-      { $skip: skip },
-      { $limit: limitNum },
-      { $project: {
-        purchaseNo: 1, date: 1, supplierName: 1, total: 1, cgst: 1, sgst: 1, status: 1,
-        billNo: 1, createdAt: 1,
-        firstProduct: { $arrayElemAt: ['$items.productName', 0] }
-      }}
-    ])
-    const total = await Purchase.countDocuments(filter)
-    
-    res.json({
-      data: list,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        pages: Math.ceil(total / limitNum)
-      }
-    })
+    const { q = '', page = 1, limit = 50, status } = req.query
+    const result = await Purchase.findAll(req.user.id, { q, status, page: parseInt(page), limit: parseInt(limit) })
+    res.json(result)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 // GET /api/purchases/:id
 router.get('/:id', async (req, res) => {
   try {
-    const doc = await Purchase.findOne({ _id: req.params.id, userId: req.user._id })
+    const doc = await Purchase.findById(parseInt(req.params.id), req.user.id)
     if (!doc) return res.status(404).json({ error: 'Not found' })
     res.json(doc)
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -67,14 +28,14 @@ router.get('/:id', async (req, res) => {
 // POST /api/purchases
 router.post('/', async (req, res) => {
   try {
-    const uid = req.user._id
-    const count = await Purchase.countDocuments({ userId: uid })
+    const uid = req.user.id
+    const count = await Purchase.count(uid)
     const purchaseNo = `PUR-${String(count + 1).padStart(4, '0')}`
 
     const {
-      date, supplierName='', supplierGstin='', billNo='',
-      items=[], sub=0, cgst=0, sgst=0, igst=0, total=0,
-      status='paid', notes=''
+      date, supplierName = '', supplierGstin = '', billNo = '',
+      items = [], sub = 0, cgst = 0, sgst = 0, igst = 0, total = 0,
+      status = 'paid', notes = ''
     } = req.body
 
     const purchase = await Purchase.create({
@@ -83,26 +44,16 @@ router.post('/', async (req, res) => {
     })
 
     // Add stock for each linked raw material (itemType='raw') or product
-    const rawOps = items
+    const rawUpdates = items
       .filter(i => i.rawMaterialId)
-      .map(i => ({
-        updateOne: {
-          filter: { _id: i.rawMaterialId, userId: uid },
-          update: { $inc: { stock: i.qty || 0 } }
-        }
-      }))
-    if (rawOps.length) await RawMaterial.bulkWrite(rawOps)
+      .map(i => ({ id: i.rawMaterialId, delta: i.qty || 0 }))
+    if (rawUpdates.length) await RawMaterial.bulkUpdateStock(rawUpdates)
 
     // fallback: also update product stock if productId set (backward compat)
-    const bulkOps = items
+    const prodUpdates = items
       .filter(i => i.productId && !i.rawMaterialId)
-      .map(i => ({
-        updateOne: {
-          filter: { _id: i.productId, userId: uid },
-          update: { $inc: { stock: i.qty || 0 } }
-        }
-      }))
-    if (bulkOps.length) await Product.bulkWrite(bulkOps)
+      .map(i => ({ id: i.productId, delta: i.qty || 0 }))
+    if (prodUpdates.length) await Product.bulkUpdateStock(prodUpdates)
 
     res.status(201).json(purchase)
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -111,7 +62,7 @@ router.post('/', async (req, res) => {
 // PUT /api/purchases/:id
 router.put('/:id', async (req, res) => {
   try {
-    const doc = await Purchase.findOne({ _id: req.params.id, userId: req.user._id })
+    const doc = await Purchase.findById(parseInt(req.params.id), req.user.id)
     if (!doc) return res.status(404).json({ error: 'Not found' })
 
     const {
@@ -125,59 +76,48 @@ router.put('/:id', async (req, res) => {
       // Reverse old stock
       if (doc.items && doc.items.length > 0) {
         for (const item of doc.items.filter(i => i.rawMaterialId)) {
-          await RawMaterial.findByIdAndUpdate(item.rawMaterialId, { $inc: { stock: -(item.qty || 0) } })
+          await RawMaterial.updateStock(item.rawMaterialId, req.user.id, -(item.qty || 0))
         }
         for (const item of doc.items.filter(i => i.productId && !i.rawMaterialId)) {
-          await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -(item.qty || 0) } })
+          await Product.updateStock(item.productId, req.user.id, -(item.qty || 0))
         }
       }
       // Add new stock
       if (items.length > 0) {
-        const rawOps = items
+        const rawUpdates = items
           .filter(i => i.rawMaterialId)
-          .map(i => ({
-            updateOne: {
-              filter: { _id: i.rawMaterialId, userId: req.user._id },
-              update: { $inc: { stock: i.qty || 0 } }
-            }
-          }))
-        if (rawOps.length) await RawMaterial.bulkWrite(rawOps)
+          .map(i => ({ id: i.rawMaterialId, delta: i.qty || 0 }))
+        if (rawUpdates.length) await RawMaterial.bulkUpdateStock(rawUpdates)
 
-        const prodOps = items
+        const prodUpdates = items
           .filter(i => i.productId && !i.rawMaterialId)
-          .map(i => ({
-            updateOne: {
-              filter: { _id: i.productId, userId: req.user._id },
-              update: { $inc: { stock: i.qty || 0 } }
-            }
-          }))
-        if (prodOps.length) await Product.bulkWrite(prodOps)
+          .map(i => ({ id: i.productId, delta: i.qty || 0 }))
+        if (prodUpdates.length) await Product.bulkUpdateStock(prodUpdates)
       }
     }
 
-    // Update fields
-    doc.date = date || doc.date
-    doc.supplierName = supplierName || doc.supplierName
-    doc.supplierGstin = supplierGstin || doc.supplierGstin
-    doc.billNo = billNo || doc.billNo
-    doc.items = items || doc.items
-    doc.sub = sub || doc.sub
-    doc.cgst = cgst || doc.cgst
-    doc.sgst = sgst || doc.sgst
-    doc.igst = igst || doc.igst
-    doc.total = total || doc.total
-    doc.status = status || doc.status
-    doc.notes = notes || doc.notes
-
-    await doc.save()
-    res.json(doc)
+    const updated = await Purchase.update(parseInt(req.params.id), req.user.id, {
+      date: date || doc.date,
+      supplierName: supplierName || doc.supplier_name,
+      supplierGstin: supplierGstin || doc.supplier_gstin,
+      billNo: billNo || doc.bill_no,
+      items: items || doc.items,
+      sub: sub ?? doc.sub,
+      cgst: cgst ?? doc.cgst,
+      sgst: sgst ?? doc.sgst,
+      igst: igst ?? doc.igst,
+      total: total || doc.total,
+      status: status || doc.status,
+      notes: notes || doc.notes
+    })
+    res.json(updated)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 // DELETE /api/purchases/:id
 router.delete('/:id', async (req, res) => {
   try {
-    const doc = await Purchase.findOneAndDelete({ _id: req.params.id, userId: req.user._id })
+    const doc = await Purchase.delete(parseInt(req.params.id), req.user.id)
     if (!doc) return res.status(404).json({ error: 'Not found' })
 
     // Reduce raw material stock when purchase is deleted
@@ -185,14 +125,14 @@ router.delete('/:id', async (req, res) => {
       for (const item of doc.items.filter(i => i.rawMaterialId)) {
         const qtyToReduce = item.qty || 0
         if (qtyToReduce > 0) {
-          await RawMaterial.findByIdAndUpdate(item.rawMaterialId, { $inc: { stock: -qtyToReduce } })
+          await RawMaterial.updateStock(item.rawMaterialId, req.user.id, -qtyToReduce)
         }
       }
       // Also reduce product stock if productId set
       for (const item of doc.items.filter(i => i.productId && !i.rawMaterialId)) {
         const qtyToReduce = item.qty || 0
         if (qtyToReduce > 0) {
-          await Product.findByIdAndUpdate(item.productId, { $inc: { stock: -qtyToReduce } })
+          await Product.updateStock(item.productId, req.user.id, -qtyToReduce)
         }
       }
     }

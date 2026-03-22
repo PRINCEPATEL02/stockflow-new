@@ -1,6 +1,6 @@
 const express = require('express')
 const Product = require('../models/Product')
-const auth    = require('../middleware/auth')
+const auth = require('../middleware/auth')
 
 const router = express.Router()
 router.use(auth)
@@ -8,49 +8,16 @@ router.use(auth)
 // GET /api/products?q=&page=&limit=&category=
 router.get('/', async (req, res) => {
   try {
-    const { q='', page = 1, limit = 100, category } = req.query
-    const filter = { userId: req.user._id }
-    
-    // Search filter
-    if (q) filter.$or = [
-      { name: new RegExp(q,'i') },
-      { sku: new RegExp(q,'i') },
-      { category: new RegExp(q,'i') },
-    ]
-    if (category) filter.category = category
-    
-    // Pagination
-    const pageNum = Math.max(1, parseInt(page) || 1)
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 100))
-    const skip = (pageNum - 1) * limitNum
-    
-    // Use lean() for ~30% faster query + select only needed fields
-    const [list, total] = await Promise.all([
-      Product.find(filter)
-        .select('name sku category unit price costPrice stock minStock description rawMaterials')
-        .sort({ name: 1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      Product.countDocuments(filter)
-    ])
-    
-    res.json({
-      data: list,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        pages: Math.ceil(total / limitNum)
-      }
-    })
+    const { q = '', page = 1, limit = 100, category } = req.query
+    const result = await Product.findAll(req.user.id, { q, page: parseInt(page), limit: parseInt(limit), category })
+    res.json(result)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 // GET /api/products/:id
 router.get('/:id', async (req, res) => {
   try {
-    const doc = await Product.findOne({ _id: req.params.id, userId: req.user._id })
+    const doc = await Product.findById(parseInt(req.params.id), req.user.id)
     if (!doc) return res.status(404).json({ error: 'Not found' })
     res.json(doc)
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -59,9 +26,11 @@ router.get('/:id', async (req, res) => {
 // POST /api/products
 router.post('/', async (req, res) => {
   try {
-    const { name, sku='', category='', unit='pcs', price=0, costPrice=0, gstRate=18, stock=0, minStock=5, description='', rawMaterials=[] } = req.body
+    const { name, sku = '', category = '', unit = 'pcs', price = 0, costPrice = 0, gstRate = 18, stock = 0, minStock = 5, description = '', rawMaterials = [] } = req.body
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' })
-    const doc = await Product.create({ userId: req.user._id, name: name.trim(), sku, category, unit, price, costPrice, gstRate, stock, minStock, description, rawMaterials })
+    const doc = await Product.create({ 
+      userId: req.user.id, name: name.trim(), sku, category, unit, price, costPrice, gstRate, stock, minStock, description, rawMaterials 
+    })
     res.status(201).json(doc)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -69,13 +38,11 @@ router.post('/', async (req, res) => {
 // PUT /api/products/:id
 router.put('/:id', async (req, res) => {
   try {
-    const { name, sku='', category='', unit='pcs', price=0, costPrice=0, gstRate=18, stock=0, minStock=5, description='', rawMaterials=[] } = req.body
+    const { name, sku = '', category = '', unit = 'pcs', price = 0, costPrice = 0, gstRate = 18, stock = 0, minStock = 5, description = '', rawMaterials = [] } = req.body
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' })
-    const doc = await Product.findOneAndUpdate(
-      { _id: req.params.id, userId: req.user._id },
-      { name: name.trim(), sku, category, unit, price, costPrice, gstRate, stock, minStock, description, rawMaterials },
-      { new: true }
-    )
+    const doc = await Product.update(parseInt(req.params.id), req.user.id, { 
+      name: name.trim(), sku, category, unit, price, costPrice, gstRate, stock, minStock, description, rawMaterials 
+    })
     if (!doc) return res.status(404).json({ error: 'Not found' })
     res.json(doc)
   } catch (err) { res.status(500).json({ error: err.message }) }
@@ -85,20 +52,25 @@ router.put('/:id', async (req, res) => {
 router.patch('/:id/stock', async (req, res) => {
   try {
     const { delta, value } = req.body
-    const prod = await Product.findOne({ _id: req.params.id, userId: req.user._id })
+    const prod = await Product.findById(parseInt(req.params.id), req.user.id)
     if (!prod) return res.status(404).json({ error: 'Not found' })
-    prod.stock = value !== undefined
-      ? Math.max(0, Number(value))
-      : Math.max(0, prod.stock + Number(delta || 0))
-    await prod.save()
-    res.json(prod)
+    
+    let newStock
+    if (value !== undefined) {
+      newStock = Math.max(0, Number(value))
+    } else {
+      newStock = Math.max(0, Number(prod.stock) + Number(delta || 0))
+    }
+    
+    const updated = await Product.setStock(parseInt(req.params.id), req.user.id, newStock)
+    res.json(updated)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 // DELETE /api/products/:id
 router.delete('/:id', async (req, res) => {
   try {
-    const doc = await Product.findOneAndDelete({ _id: req.params.id, userId: req.user._id })
+    const doc = await Product.delete(parseInt(req.params.id), req.user.id)
     if (!doc) return res.status(404).json({ error: 'Not found' })
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }

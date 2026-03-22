@@ -1,46 +1,46 @@
-const express  = require('express')
-const Sale     = require('../models/Sale')
+const express = require('express')
+const Sale = require('../models/Sale')
 const Purchase = require('../models/Purchase')
 const Customer = require('../models/Customer')
-const Product  = require('../models/Product')
+const Product = require('../models/Product')
 const RawMaterial = require('../models/RawMaterial')
 const Estimate = require('../models/Estimate')
-const auth     = require('../middleware/auth')
+const auth = require('../middleware/auth')
 
 const router = express.Router()
 router.use(auth)
 
 router.get('/', async (req, res) => {
   try {
-    const uid = req.user._id
+    const uid = req.user.id
 
     // Get raw materials stock first
-    const rawMats = await RawMaterial.find({ userId: uid }).select('_id name stock unit').lean()
+    const rawMats = await RawMaterial.findAll(uid)
     const rawMatMap = {}
-    rawMats.forEach(rm => { rawMatMap[rm._id.toString()] = rm })
+    rawMats.forEach(rm => { rawMatMap[rm.id] = rm })
 
     // Also return raw materials stock for dashboard
     const rawMaterialsStock = rawMats.map(rm => ({
-      _id: rm._id,
+      id: rm.id,
       name: rm.name,
       stock: rm.stock,
       unit: rm.unit
     })).sort((a, b) => a.stock - b.stock)
 
     // Calculate production capacity for each product
-    const products = await Product.find({ userId: uid }).select('name stock minStock unit rawMaterials').lean()
+    const products = await Product.findAllWithoutPagination(uid)
     const productionCapacity = products.map(p => {
       let maxCanMake = Infinity
       let limitingMaterial = null
       let limitingQty = 0
       let limitingStock = 0
       
-      if (p.rawMaterials && p.rawMaterials.length > 0) {
-        p.rawMaterials.forEach(rm => {
-          // Try to match by materialId (ObjectId) or by materialName
+      if (p.raw_materials && p.raw_materials.length > 0) {
+        p.raw_materials.forEach(rm => {
+          // Try to match by materialId or by materialName
           let rawStock = null
           if (rm.materialId) {
-            rawStock = rawMatMap[rm.materialId.toString()]
+            rawStock = rawMatMap[rm.materialId]
           }
           if (!rawStock && rm.materialName) {
             // Fallback: match by name
@@ -65,7 +65,7 @@ router.get('/', async (req, res) => {
       if (maxCanMake === Infinity) maxCanMake = 0
       
       return {
-        _id: p._id,
+        id: p.id,
         name: p.name,
         canMake: maxCanMake,
         limitingMaterial,
@@ -75,20 +75,16 @@ router.get('/', async (req, res) => {
       }
     }).filter(p => p.limitingMaterial).sort((a, b) => a.canMake - b.canMake)
 
-    const [totSalesArr, totPurchArr, custCount, prodCount, unpaidCount, pendEst, recentSales] =
+    const [totSales, totPurch, custCount, prodCount, unpaidCount, pendEst, recentSales] =
       await Promise.all([
-        Sale.aggregate([{ $match: { userId: uid } }, { $group: { _id: null, v: { $sum: '$total' } } }]),
-        Purchase.aggregate([{ $match: { userId: uid } }, { $group: { _id: null, v: { $sum: '$total' } } }]),
-        Customer.countDocuments({ userId: uid }),
-        Product.countDocuments({ userId: uid }),
-        Sale.countDocuments({ userId: uid, status: { $ne: 'paid' } }),
-        Estimate.countDocuments({ userId: uid, status: 'pending' }),
-        Sale.find({ userId: uid }).sort({ createdAt: -1 }).limit(6)
-                .select('invoiceNo date customerName total status').lean(),
+        Sale.getTotalSales(uid),
+        Purchase.getTotalPurchases(uid),
+        Customer.count(uid),
+        Product.count(uid),
+        Sale.count(uid, { status: 'unpaid' }),
+        Estimate.count(uid, { status: 'pending' }),
+        Sale.findRecent(uid, 6)
       ])
-
-    const totSales = totSalesArr[0]?.v || 0
-    const totPurch = totPurchArr[0]?.v || 0
 
     // Last 6 months chart data
     const months = []
@@ -100,21 +96,33 @@ router.get('/', async (req, res) => {
       const prefix = `${y}-${m}`
       const lbl = d.toLocaleDateString('en-IN', { month: 'short' })
 
-      const [sArr, pArr] = await Promise.all([
-        Sale.aggregate([
-          { $match: { userId: uid, date: { $regex: `^${prefix}` } } },
-          { $group: { _id: null, v: { $sum: '$total' } } }
-        ]),
-        Purchase.aggregate([
-          { $match: { userId: uid, date: { $regex: `^${prefix}` } } },
-          { $group: { _id: null, v: { $sum: '$total' } } }
-        ]),
-      ])
-      months.push({ lbl, s: sArr[0]?.v || 0, p: pArr[0]?.v || 0 })
+      // Get sales and purchases for this month
+      const allSales = await Sale.findByDateRange(uid, `${prefix}-01`, `${prefix}-31`)
+      const allPurchases = await Purchase.findByDateRange(uid, `${prefix}-01`, `${prefix}-31`)
+      
+      const s = allSales.reduce((acc, s) => acc + parseFloat(s.total || 0), 0)
+      const p = allPurchases.reduce((acc, p) => acc + parseFloat(p.total || 0), 0)
+      
+      months.push({ lbl, s, p })
     }
 
-    res.json({ totSales, totPurch, profit: totSales - totPurch, custCount, prodCount, unpaidCount, pendEst, productionCapacity, rawMaterialsStock, recentSales, months })
-  } catch (err) { res.status(500).json({ error: err.message }) }
+    res.json({ 
+      totSales, 
+      totPurch, 
+      profit: totSales - totPurch, 
+      custCount, 
+      prodCount, 
+      unpaidCount, 
+      pendEst, 
+      productionCapacity, 
+      rawMaterialsStock, 
+      recentSales, 
+      months 
+    })
+  } catch (err) { 
+    console.error('Dashboard error:', err)
+    res.status(500).json({ error: err.message }) 
+  }
 })
 
 module.exports = router
