@@ -6,6 +6,7 @@ const Product = require('../models/Product')
 const RawMaterial = require('../models/RawMaterial')
 const Estimate = require('../models/Estimate')
 const auth = require('../middleware/auth')
+const cache = require('../config/cache')
 
 const router = express.Router()
 router.use(auth)
@@ -13,6 +14,16 @@ router.use(auth)
 router.get('/', async (req, res) => {
   try {
     const uid = req.user.id
+
+    // Try to get from cache first
+    const cacheKey = `dashboard:${uid}`
+    const cached = cache.get(cacheKey)
+    if (cached) {
+      console.log('📦 Dashboard cache HIT')
+      return res.json(cached)
+    }
+
+    console.log('🔄 Dashboard cache MISS - fetching fresh data')
 
     // Get raw materials stock first
     const rawMats = await RawMaterial.findAll(uid)
@@ -106,7 +117,7 @@ router.get('/', async (req, res) => {
       months.push({ lbl, s, p })
     }
 
-    res.json({ 
+    const response = { 
       totSales, 
       totPurch, 
       profit: totSales - totPurch, 
@@ -118,7 +129,12 @@ router.get('/', async (req, res) => {
       rawMaterialsStock, 
       recentSales, 
       months 
-    })
+    }
+
+    // Cache the response
+    cache.set(cacheKey, response, 120) // Cache for 2 minutes
+
+    res.json(response)
   } catch (err) { 
     console.error('Dashboard error:', err)
     res.status(500).json({ error: err.message }) 

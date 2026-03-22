@@ -4,6 +4,7 @@ const Product = require('../models/Product')
 const RawMaterial = require('../models/RawMaterial')
 const Company = require('../models/Company')
 const auth = require('../middleware/auth')
+const cache = require('../config/cache')
 
 const router = express.Router()
 router.use(auth)
@@ -168,6 +169,9 @@ router.post('/', async (req, res) => {
     // Clamp raw material stock to 0
     await RawMaterial.clampStock(uid)
 
+    // Invalidate dashboard cache
+    cache.invalidateDashboard(uid)
+
     res.status(201).json(sale)
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
@@ -258,6 +262,10 @@ router.delete('/:id', async (req, res) => {
         }
       }
     }
+
+    // Invalidate cache
+    cache.invalidateDashboard(req.user.id)
+    cache.invalidateSales(req.user.id)
 
     res.json({ success: true })
   } catch (err) { res.status(500).json({ error: err.message }) }

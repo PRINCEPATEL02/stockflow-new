@@ -223,8 +223,27 @@ CREATE TABLE IF NOT EXISTS warranties (
 );
 
 -- =====================================================
--- Indexes for Performance
+-- Additional Performance Indexes
 -- =====================================================
+-- Index on created_at for sorting (used in most queries)
+CREATE INDEX IF NOT EXISTS idx_customers_created_at ON customers(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_created_at ON sales(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_purchases_created_at ON purchases(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_estimates_created_at ON estimates(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_warranties_created_at ON warranties(created_at DESC);
+
+-- Composite indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_sales_user_date ON sales(user_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_sales_user_status ON sales(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_products_user_category ON products(user_id, category);
+CREATE INDEX IF NOT EXISTS idx_customers_user_type ON customers(user_id, type);
+
+-- Index for low stock queries
+CREATE INDEX IF NOT EXISTS idx_products_low_stock ON products(user_id) WHERE stock <= min_stock;
+
+-- Index for recent items
+CREATE INDEX IF NOT EXISTS idx_sales_recent ON sales(user_id, created_at DESC) LIMIT 1;
 CREATE INDEX IF NOT EXISTS idx_customers_user_id ON customers(user_id);
 CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
 CREATE INDEX IF NOT EXISTS idx_customers_type ON customers(type);

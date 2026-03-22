@@ -37,6 +37,7 @@ app.use(cors({
     'http://localhost:4173',
     'http://localhost:3000',
     'https://stockflow-new-frontend.onrender.com',
+    // Add your production domains here
   ],
   credentials: true,
 }))
