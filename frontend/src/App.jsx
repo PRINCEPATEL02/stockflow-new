@@ -5,6 +5,7 @@ import LoginPage from './components/LoginPage'
 import ResetPasswordPage from './components/ResetPasswordPage'
 import Sidebar from './components/Sidebar'
 import { SkeletonStatsGrid } from './components/Skeleton'
+import { useRealtimeSubscription } from './hooks/useRealtime'
 
 // Lazy load pages for code splitting and faster initial load
 const Dashboard = lazy(() => import('./pages/index.jsx').then(module => ({ default: module.Dashboard })))
@@ -54,6 +55,9 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState(() => urlPage || 'dashboard')
   const [initialized, setInitialized] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Enable real-time updates when user is logged in
+  useRealtimeSubscription(user?.id)
 
   // Sync state with URL on mount
   useEffect(() => {

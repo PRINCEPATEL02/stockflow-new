@@ -9,6 +9,7 @@
     "preview": "node ./node_modules/vite/bin/vite.js preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.99.3",
     "@tanstack/react-query": "^5.91.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
